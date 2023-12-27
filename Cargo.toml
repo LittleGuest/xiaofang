@@ -3,41 +3,37 @@ name = "xiaofang"
 version = "0.1.0"
 authors = ["LittleGuest <2190975784@qq.com>"]
 edition = "2021"
-resolver = "2"
-rust-version = "1.66"
-
-[profile.release]
-opt-level = "s"
-
-[profile.dev]
-debug = true    # Symbols are nice and they don't increase the size on Flash
-opt-level = "z"
-
-[features]
-default = ["std", "embassy", "esp-idf-svc/native"]
-
-pio = ["esp-idf-svc/pio"]
-std = ["alloc", "esp-idf-svc/binstart", "esp-idf-svc/std"]
-alloc = ["esp-idf-svc/alloc"]
-nightly = ["esp-idf-svc/nightly"]
-experimental = ["esp-idf-svc/experimental"]
-embassy = [
-  "esp-idf-svc/embassy-sync",
-  "esp-idf-svc/critical-section",
-  "esp-idf-svc/embassy-time-driver",
-]
+license = "MIT"
 
 [dependencies]
-log = { version = "0.4", default-features = false }
-esp-idf-svc = { version = "0.47.3", default-features = false }
-# esp-idf-hal = { version = "0.42.5", default-features = false }
-max7219 = "0.4.0"
-anyhow = "1.0.75"
-rand = { version = "0.8.5" }
+hal = { package = "esp32c3-hal", version = "0.13.0" }
+esp-backtrace = { version = "0.9.0", features = [
+  "esp32c3",
+  "panic-handler",
+  "exception-handler",
+  "print-uart",
+] }
+esp-println = { version = "0.7.0", features = ["esp32c3", "log"] }
+log = { version = "0.4.18" }
+esp-alloc = { version = "0.3.0" }
+esp-wifi = { version = "0.1.1", features = ["esp32c3", "wifi"] }
+smoltcp = { version = "0.10.0", default-features = false, features = [
+  "proto-igmp",
+  "proto-ipv4",
+  "socket-tcp",
+  "socket-icmp",
+  "socket-udp",
+  "medium-ethernet",
+  "proto-dhcpv4",
+  "socket-raw",
+  "socket-dhcpv4",
+] }
+embedded-svc = { version = "0.25.0", default-features = false, features = [] }
+embedded-io = "0.4.0"
+heapless = { version = "0.7.14", default-features = false }
+smart-leds = "0.3.0"
+ws2812-spi = "0.4.0"
 mpu6050-dmp = "0.3.0"
+# max7219 = "0.4.0"
 embedded-hal = "0.2.7"
-# embedded-svc = "0.26.4"
-# esp-idf-sys = "0.33.7"
-
-[build-dependencies]
-embuild = "0.31.3"
+fastrand = { version = "2.0.1", default-features = false }

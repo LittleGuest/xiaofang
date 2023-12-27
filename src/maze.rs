@@ -1,4 +1,4 @@
-//迷宫地图结构体
+/// 迷宫地图
 pub struct Maze {
     /// 地图序号，从0开始
     pub index: u8,
@@ -11,8 +11,8 @@ pub struct Maze {
     pub wx: u8,
     pub wy: u8,
     /// 出口闪烁区域,地图全局坐标，左上方为原点
-    pub ex: u8,
-    pub ey: u8,
+    pub ex: i8,
+    pub ey: i8,
 }
 
 impl Maze {

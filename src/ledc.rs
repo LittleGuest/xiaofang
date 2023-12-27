@@ -1,51 +1,43 @@
-use embedded_hal::digital::v2::OutputPin;
-use max7219::{
-    connectors::{Connector, PinConnector},
-    MAX7219,
+use hal::{
+    peripherals::SPI2,
+    spi::{master::Spi, FullDuplexMode},
 };
+use smart_leds::{SmartLedsWrite, RGB, RGB8};
+use ws2812_spi::Ws2812;
 
 use crate::Gd;
 
-pub struct LedControl<Connector> {
+pub struct LedControl<'d> {
     /// 初级显存
     pub buf_work: [u8; 8],
     /// 最终上传的数据
     buf: [u8; 8],
     pub gd: Gd,
-    led: MAX7219<Connector>,
+    ws: Ws2812<Spi<'d, SPI2, FullDuplexMode>>,
 }
 
-impl<DATA, CS, CLK> LedControl<PinConnector<DATA, CS, CLK>>
-where
-    DATA: OutputPin,
-    CS: OutputPin,
-    CLK: OutputPin,
-{
-    pub fn new(data: DATA, cs: CS, clk: CLK) -> Self {
-        let mut max7219 = MAX7219::from_pins(4, data, cs, clk).unwrap();
-        max7219.power_on().unwrap();
-        max7219.clear_display(0).unwrap();
-
+impl<'d> LedControl<'d> {
+    pub fn new(ws: Ws2812<Spi<'d, SPI2, FullDuplexMode>>) -> Self {
         Self {
             buf_work: [0; 8],
             buf: [0; 8],
             gd: Gd::default(),
-            led: max7219,
+            ws,
         }
     }
-}
 
-impl<C> LedControl<C>
-where
-    C: Connector,
-{
+    pub fn write(&mut self) {
+        self.ws.write([RGB8::new(0, 0, 0); 64].into_iter());
+        self.ws.write([RGB8::new(12, 12, 12); 65].into_iter());
+    }
+
     pub fn shutdown(&mut self) {
-        self.led.power_off();
+        // self.led.power_off();
     }
 
     // 设置亮度，亮度范围0x00-0x0F(0-15)
     pub fn set_intensity(&mut self, intensity: u8) {
-        self.led.set_intensity(0, intensity);
+        // self.led.set_intensity(0, intensity);
     }
 
     pub fn clear_work(&mut self) {
@@ -62,15 +54,15 @@ where
     }
 
     pub fn upload(&mut self) {
-        if let Err(e) = self.led.write_raw(0, &self.buf) {
-            log::error!("{e:?}");
-        }
+        // if let Err(e) = self.led.write_raw(0, &self.buf) {
+        //     log::error!("{e:?}");
+        // }
     }
 
     pub fn upload_raw(&mut self, raw: [u8; 8]) {
-        if let Err(e) = self.led.write_raw(0, &raw) {
-            log::error!("{e:?}");
-        }
+        // if let Err(e) = self.led.write_raw(0, &raw) {
+        //     log::error!("{e:?}");
+        // }
     }
 
     /// 设置指定坐标单个led的亮灭
@@ -99,37 +91,16 @@ where
         }
     }
 
-    // /// 获取缓存里指定坐标的状态，返回1或者0
-    // /// 判断在后级缓存里指定坐标像素的状态
-    // /// 这个用于判断用于上传的显存里指定坐标像素的状态
-    // pub fn get_led_state(&mut self, x: u8, y: u8) -> u8 {
-    //     let y = y as usize;
-    //     let mut x_b = 0;
-    //     if x >= 0 && x <= 7 && y >= 0 && y <= 7 {
-    //         x_b = self.buf[y] & (1 << (7 - x));
-    //     } else {
-    //         return 3;
-    //     } // 如果参数不合法就返回3
-
-    //     if x_b == 1 {
-    //         return 1;
-    //     } else {
-    //         return 0;
-    //     }
-    // }
-
     /// 判断在外部缓存里指定坐标像素的状态
     /// 获取外部显存数组指定坐标的状态,这个用于像素互动判断
-    pub fn get_led_state_work(&mut self, x: u8, y: u8, view: [u8; 8]) -> u8 {
-        let state = if x <= 7 && y <= 7 {
-            view[y as usize] & (1 << (7 - x))
+    pub fn get_led_state_work(&self, x: u8, y: u8, view: [u8; 8]) -> bool {
+        log::info!("led view {view:?}");
+        if x <= 7 && y <= 7 {
+            let state = view[y as usize] & (1 << (7 - x));
+            log::info!("led stat {state}");
+            state > 0
         } else {
-            3
-        };
-
-        match state {
-            1 => 1,
-            _ => 0,
+            false
         }
     }
 
@@ -146,42 +117,45 @@ where
         // 默认重力方向为下3
         // 根据当前方向和按键输入，更新蛇头移动方向
         log::info!("ledc.gd => {:?}", self.gd);
-        match self.gd {
-            Gd::None => {}
-            Gd::Up => {
-                // 上方朝下时
-                for j in 0..8 {
-                    self.buf[j] = 0;
-                    for i in 0..8 {
-                        self.buf[j] |= ((buf[7 - j] >> i) & 1) << (7 - i);
-                    }
-                }
-            }
-            Gd::Right => {
-                // 右方朝下时ok
-                for i in 0..8 {
-                    self.buf[7 - i as usize] = 0;
-                    for j in 0..8 {
-                        self.buf[7 - i] |= ((buf[j] & (0b10000000 >> i)) << i) >> j;
-                    }
-                }
-            }
-            Gd::Down => {
-                // 下方朝下时【默认方向，就直接写入，不做变换】ok
-                for i in 0..8 {
-                    self.buf[i] = buf[i];
-                }
-            }
-            Gd::Left => {
-                // 左方朝下时ok
-                for i in 0..8 {
-                    self.buf[7 - i] = 0;
-                    for j in 0..8 {
-                        self.buf[7 - i] |= ((buf[7 - j] & (0b00000001 << i)) >> i) << (7 - j);
-                    }
-                }
-            }
+        for i in 0..8 {
+            self.buf[i] = buf[i];
         }
+        // match self.gd {
+        //     Gd::None => {}
+        //     Gd::Up => {
+        //         // 上方朝下时
+        //         for j in 0..8 {
+        //             self.buf[j] = 0;
+        //             for i in 0..8 {
+        //                 self.buf[j] |= ((buf[7 - j] >> i) & 1) << (7 - i);
+        //             }
+        //         }
+        //     }
+        //     Gd::Right => {
+        //         // 右方朝下时ok
+        //         for i in 0..8 {
+        //             self.buf[7 - i as usize] = 0;
+        //             for j in 0..8 {
+        //                 self.buf[7 - i] |= ((buf[j] & (0b10000000 >> i)) << i) >> j;
+        //             }
+        //         }
+        //     }
+        //     Gd::Down => {
+        //         // 下方朝下时【默认方向，就直接写入，不做变换】ok
+        //         for i in 0..8 {
+        //             self.buf[i] = buf[i];
+        //         }
+        //     }
+        //     Gd::Left => {
+        //         // 左方朝下时ok
+        //         for i in 0..8 {
+        //             self.buf[7 - i] = 0;
+        //             for j in 0..8 {
+        //                 self.buf[7 - i] |= ((buf[7 - j] & (0b00000001 << i)) >> i) << (7 - j);
+        //             }
+        //         }
+        //     }
+        // }
     }
 
     /// 按某个方向滚动

@@ -1,9 +1,6 @@
-use std::collections::LinkedList;
+use alloc::collections::LinkedList;
 
-use log::info;
-use max7219::connectors::Connector;
-
-use crate::{delay_ms, mapping::num_map, App, Direction, Gd, Position};
+use crate::{mapping::num_map, App, Direction, Gd, Position};
 
 type Food = Position;
 
@@ -34,22 +31,23 @@ impl SnakeGame {
         }
     }
 
-    pub fn run<C: Connector>(&mut self, app: &mut App<C>) {
+    pub fn run<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         app.ledc.clear();
         app.gd = Gd::default();
 
         loop {
-            info!("game_over ? {}", self.game_over);
             if self.game_over {
-                self.draw_score(app);
-                delay_ms(3000);
+                // TODO 历史最高分动画,音乐
+                // self.draw_score(app);
+                // delay_ms(3000);
                 break;
             }
             app.gravity_direction();
             self.r#move(&app.gd);
-            self.draw(app);
+            // TODO 移动音效,得分音效和画面效果,死亡音效
+            // self.draw(app);
 
-            delay_ms(self.waiting_time);
+            // delay_ms(self.waiting_time);
         }
     }
 
@@ -98,7 +96,7 @@ impl SnakeGame {
         self.food = food;
     }
 
-    pub fn draw<C: Connector>(&mut self, app: &mut App<C>) {
+    pub fn draw<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         let ledc = &mut app.ledc;
         ledc.clear();
         ledc.clear_work();
@@ -111,7 +109,7 @@ impl SnakeGame {
         ledc.upload_raw(tmp);
     }
 
-    fn draw_score<C: Connector>(&self, app: &mut App<C>) {
+    fn draw_score<T: hal::i2c::Instance>(&self, app: &mut App<T>) {
         app.ledc.clear();
 
         let dn = self.score / 10;
@@ -124,7 +122,6 @@ impl SnakeGame {
         (0..8).for_each(|i| app.ledc.buf_work[i] |= sn[i]);
         (0..8).for_each(|i| app.ledc.buf_work[i] >>= 1);
 
-        // app.ledc.bitmap(app.ledc.buf_work);
         app.ledc.upload_raw(app.ledc.buf_work);
     }
 }

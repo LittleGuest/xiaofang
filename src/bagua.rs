@@ -1,7 +1,4 @@
-use max7219::connectors::Connector;
-use rand::Rng;
-
-use crate::{delay_ms, App};
+use crate::{App, RAND};
 
 /// 八卦
 #[derive(Debug)]
@@ -114,24 +111,28 @@ impl BaGua {
     }
 
     fn random() -> [u8; 8] {
-        let num = rand::thread_rng().gen_range(1..=8);
+        let num = unsafe { RAND.get_mut().unwrap().u8(1..=8) };
         Self::bagua(num)
     }
 
-    pub fn run<C: Connector>(app: &mut App<C>) {
+    pub fn run<T: hal::i2c::Instance>(app: &mut App<T>) {
         app.ledc.clear();
         loop {
             let accel = app.accel();
-            if accel.x().abs() > 0.3 && accel.y().abs() > 0.3 {
+            if (accel.x() > 0.3 || accel.x() < -0.3) && (accel.y() > 0.3 || accel.y() < -0.3) {
                 if (0..30)
-                    .map(|_| (app.accel().x().abs(), app.accel().y().abs()))
-                    .any(|(x, y)| x > 0.3 && y > 0.3)
+                    // .map(|_| (app.accel().x().abs(), app.accel().y().abs()))
+                    // .any(|(x, y)| x > 0.3 && y > 0.3)
+                    .map(|_| (app.accel().x(), app.accel().y()))
+                    .any(|(x, y)| (x > 0.3 || x < -0.3) && (y > 0.3 || y < -0.3))
                 {
                     app.ledc.bitmap(Self::random());
                     app.ledc.upload();
                 }
             }
-            delay_ms(800);
+            // FIXME delay_ms(800);
+
+            // TODO 退出占卦模式
         }
     }
 }

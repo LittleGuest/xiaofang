@@ -3,25 +3,23 @@
 pub enum Ui {
     /// 沙漏
     #[default]
-    Timer = 0,
+    Timer,
     /// 骰子
-    Dice = 1,
+    Dice,
     /// 贪吃蛇
-    Snake = 2,
+    Snake,
     /// 卦象
-    BaGua = 3,
+    BaGua,
     /// 迷宫
-    Maze = 4,
+    Maze,
     /// 温度
-    Temp = 5,
+    Temp,
     /// 声音
-    Sound = 6,
-    /// 版本
-    Version = 7,
+    Sound,
 }
 
 impl Ui {
-    pub fn uis() -> [Ui; 8] {
+    pub fn uis() -> [Ui; 7] {
         [
             Ui::Timer,
             Ui::Dice,
@@ -30,7 +28,6 @@ impl Ui {
             Ui::Maze,
             Ui::Temp,
             Ui::Sound,
-            Ui::Version,
         ]
     }
 
@@ -105,16 +102,6 @@ impl Ui {
                 0b00011000,
                 0b00111000,
                 0b00110000,
-                0b00000000,
-            ],
-            Ui::Version => [
-                0b00000000,
-                0b00000000,
-                0b01100110,
-                0b01100110,
-                0b00000000,
-                0b01000010,
-                0b00111100,
                 0b00000000,
             ],
         }

@@ -1,17 +1,23 @@
+#![no_std]
+#![no_main]
+
+use core::{cell::OnceCell, mem::MaybeUninit};
+
 use bagua::BaGua;
-use esp_idf_svc::hal::{delay::FreeRtos, i2c::I2cDriver};
+use dice::Dice;
+use face::Face;
+use fastrand::Rng;
+use hal::i2c::I2C;
 use ledc::LedControl;
-use log::info;
-use max7219::connectors::Connector;
 use mpu6050_dmp::{
     accel::{AccelF32, AccelFullScale},
     sensor::Mpu6050,
 };
-use rand::Rng;
 use snake::SnakeGame;
+use timer::Timer;
 use ui::Ui;
 
-use crate::face::Face;
+extern crate alloc;
 
 mod bagua;
 mod battery;
@@ -21,7 +27,26 @@ pub mod ledc;
 mod mapping;
 mod maze;
 mod snake;
+mod timer;
 mod ui;
+
+#[global_allocator]
+static ALLOCATOR: esp_alloc::EspHeap = esp_alloc::EspHeap::empty();
+
+// static mut RAND: Rng = Rng::with_seed(1);
+static mut RAND: OnceCell<Rng> = OnceCell::new();
+
+pub fn init() {
+    let once = OnceCell::new();
+    once.get_or_init(|| Rng::with_seed(1));
+
+    //     const HEAP_SIZE: usize = 32 * 1024;
+    //     static mut HEAP: MaybeUninit<[u8; HEAP_SIZE]> = MaybeUninit::uninit();
+    //
+    //     unsafe {
+    //         ALLOCATOR.init(HEAP.as_mut_ptr() as *mut u8, HEAP_SIZE);
+    //     }
+}
 
 /// 左上角为坐标原点,横x,纵y
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -34,6 +59,7 @@ impl Position {
     fn new(x: i8, y: i8) -> Self {
         Position { x, y }
     }
+
     fn r#move(&mut self, d: Direction) {
         match d {
             Direction::Up => {
@@ -56,18 +82,15 @@ impl Position {
             Direction::Down => pos.y += 1,
             Direction::Left => pos.x -= 1,
         }
-
-        info!("pos => {pos:?}");
-
         pos
     }
 
     fn random(x: i8, y: i8) -> Self {
-        let mut rng = rand::thread_rng();
-
-        Self {
-            x: rng.gen_range(0..x),
-            y: rng.gen_range(0..y),
+        unsafe {
+            Self {
+                x: RAND.get_mut().unwrap().i8(0..x),
+                y: RAND.get_mut().unwrap().i8(0..y),
+            }
         }
     }
 }
@@ -91,28 +114,6 @@ impl Direction {
     }
 }
 
-/// 左上角为坐标原点,横x,纵y
-/// 定义：* * ｜0 0 0｜0 0 0
-///      无用 |x坐 标|y坐标
-// #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-// struct PositionByte(u8);
-//
-// impl PositionByte {
-//     fn r#move(&mut self, gd: Gd) {
-//         match gd {
-//             Gd::None => {}
-//             Gd::Up => {
-//                 self.0 -= 1;
-//                 // self.tail_x = self.tail_xy >> 3;
-//                 // self.tail_y = self.tail_xy & 0b00000111;
-//             }
-//             Gd::Right => self.0 += 1,
-//             Gd::Down => self.0 += 1,
-//             Gd::Left => self.0 -= 1,
-//         }
-//     }
-// }
-
 /// 重力方向
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 enum Gd {
@@ -124,41 +125,38 @@ enum Gd {
     Left,
 }
 
-pub fn delay_ms(dur: u32) {
-    FreeRtos::delay_ms(dur);
-}
-
-pub fn delay_us(dur: u32) {
-    FreeRtos::delay_us(dur);
-}
-
 /// 小方
-pub struct App<'d, C> {
+pub struct App<'d, T>
+where
+    T: hal::i2c::Instance,
+{
     /// 蜂鸣器开关
     buzzer: bool,
     /// 界面
-    uis: [Ui; 8],
+    uis: [Ui; 7],
     /// 当前界面的索引
     ui_current_idx: i8,
     /// 表情
     face: Face,
     gd: Gd,
 
-    mpu6050: Mpu6050<I2cDriver<'d>>,
-    ledc: LedControl<C>,
+    mpu6050: Mpu6050<I2C<'d, T>>,
+    ledc: LedControl<'d>,
 }
 
-impl<'d, C> App<'d, C>
+impl<'d, T> App<'d, T>
 where
-    C: Connector,
+    T: hal::i2c::Instance,
 {
     fn gravity_direction(&mut self) {
         let accel = self.accel();
         let ax = accel.x();
         let ay = accel.y();
 
-        let ax_abs = ax.abs();
-        let ay_abs = ay.abs();
+        // let ax_abs = ax.abs();
+        // let ay_abs = ay.abs();
+        let ax_abs = if ax <= 0.0 { 0.0 - ax } else { ax };
+        let ay_abs = if ay <= 0.0 { 0.0 - ay } else { ay };
         if ax_abs > 0.5 || ay_abs > 0.5 {
             if ax_abs > ay_abs {
                 if ax < -0.5 {
@@ -187,7 +185,7 @@ where
         }
     }
 
-    pub fn new(mpu6050: Mpu6050<I2cDriver<'d>>, mut ledc: LedControl<C>) -> Self {
+    pub fn new(mpu6050: Mpu6050<I2C<'d, T>>, mut ledc: LedControl<'d>) -> Self {
         ledc.set_intensity(0x01);
 
         App {
@@ -206,9 +204,9 @@ where
         self.mpu6050.accel().unwrap().scaled(AccelFullScale::G2)
     }
 
-    pub fn run(mut self) -> anyhow::Result<()> {
+    pub fn run(mut self) -> ! {
         loop {
-            delay_ms(800);
+            // FIXME delay_ms(800);
 
             self.gravity_direction();
             if self.gd == Gd::default() {
@@ -229,18 +227,13 @@ where
                     // 向上进入对应的界面
                     let ui = &self.uis[self.ui_current_idx as usize];
                     match ui {
-                        Ui::Timer => {}
-                        Ui::Dice => {}
-                        Ui::Snake => {
-                            SnakeGame::new().run(&mut self);
-                        }
-                        Ui::BaGua => {
-                            BaGua::run(&mut self);
-                        }
+                        Ui::Timer => Timer::run(&mut self),
+                        Ui::Dice => Dice::run(&mut self),
+                        Ui::Snake => SnakeGame::new().run(&mut self),
+                        Ui::BaGua => BaGua::run(&mut self),
                         Ui::Maze => {}
                         Ui::Temp => {}
                         Ui::Sound => {}
-                        Ui::Version => {}
                     }
                 }
                 Gd::Right => {

@@ -1,6 +1,4 @@
-use max7219::connectors::Connector;
-
-use crate::{delay_ms, App};
+use crate::App;
 
 /// 表情
 #[derive(Debug)]
@@ -165,7 +163,7 @@ impl Face {
     }
 
     /// 休眠表情
-    pub fn dormancy_face<C: Connector>(&mut self, app: &App<C>) {
+    pub fn dormancy_face<T: hal::i2c::Instance>(&mut self, app: &App<T>) {
         // byte beeper_old = beeper;
         // beeper = 1;
         let ex: u8 = 1;
@@ -178,7 +176,7 @@ impl Face {
         self.slack_mouth();
         //呆滞眼
         self.slack_eyes(ex, ey);
-        delay_ms(200);
+        // delay_ms(200);
         // zhonglifangxiang_panduan();
         // lc.bitmap(lc.LedBuffer_work);
         // lc.UpLoad();
@@ -198,7 +196,7 @@ impl Face {
         self.clear();
         self.slack_eyes(ex - 1, ey);
         self.slack_mouth();
-        delay_ms(200);
+        // delay_ms(200);
         // zhonglifangxiang_panduan();
         // lc.bitmap(lc.LedBuffer_work);
         // lc.UpLoad();
@@ -216,7 +214,7 @@ impl Face {
         self.clear();
         self.slack_eyes(ex, ey);
         self.slack_mouth();
-        delay_ms(200);
+        // delay_ms(200);
         // zhonglifangxiang_panduan();
         // lc.bitmap(lc.LedBuffer_work);
         // lc.UpLoad();
@@ -237,7 +235,7 @@ impl Face {
         // }
         self.slack_eyes(ex + 1, ey);
         self.slack_mouth();
-        delay_ms(200);
+        // delay_ms(200);
         // zhonglifangxiang_panduan();
         // lc.bitmap(lc.LedBuffer_work);
         // lc.UpLoad();
@@ -569,7 +567,7 @@ impl Face {
         self.clear();
         self.slack_eyes(ex, ey);
         self.slack_mouth();
-        delay_ms(200);
+        // delay_ms(200);
         // zhonglifangxiang_panduan();
         // lc.bitmap(lc.LedBuffer_work);
         // lc.UpLoad();
@@ -581,7 +579,7 @@ impl Face {
         // }
         self.slack_eyes(ex, ey);
         self.pout_mouth();
-        delay_ms(200);
+        // delay_ms(200);
         // zhonglifangxiang_panduan();
         // lc.bitmap(lc.LedBuffer_work);
         // lc.UpLoad();
@@ -599,7 +597,7 @@ impl Face {
         self.clear();
         self.slack_eyes(ex, ey);
         self.slack_mouth();
-        delay_ms(200);
+        // delay_ms(200);
         // zhonglifangxiang_panduan();
         // lc.bitmap(lc.LedBuffer_work);
         // lc.UpLoad();
@@ -621,7 +619,7 @@ impl Face {
         // }
         self.close_eyes();
         self.slack_mouth();
-        delay_ms(200);
+        // delay_ms(200);
         // zhonglifangxiang_panduan();
         // lc.bitmap(lc.LedBuffer_work);
         // lc.UpLoad();
@@ -638,7 +636,7 @@ impl Face {
         self.clear();
         self.slack_eyes(ex, ey);
         self.slack_mouth();
-        delay_ms(200);
+        // delay_ms(200);
         // zhonglifangxiang_panduan();
         // lc.bitmap(lc.LedBuffer_work);
         // lc.UpLoad();
@@ -658,7 +656,7 @@ impl Face {
         // }
         self.close_eyes();
         self.slack_mouth();
-        delay_ms(200);
+        // delay_ms(200);
         // zhonglifangxiang_panduan();
         // lc.bitmap(lc.LedBuffer_work);
         // lc.UpLoad();
@@ -675,7 +673,7 @@ impl Face {
         self.clear();
         self.slack_eyes(ex, ey);
         self.slack_mouth();
-        delay_ms(200);
+        // delay_ms(200);
         // zhonglifangxiang_panduan();
         // lc.bitmap(lc.LedBuffer_work);
         // lc.UpLoad();
@@ -772,7 +770,7 @@ impl Face {
     }
 
     /// FIXME 破记录
-    pub fn break_record_face<C: Connector>(&mut self, app: &App<C>) {
+    pub fn break_record_face<T: hal::i2c::Instance>(&mut self, app: &App<T>) {
         // TODO 开启声音
         let beeper: u8 = 1;
 
@@ -787,7 +785,7 @@ impl Face {
         // zhonglifangxiang_panduan();
         // lc.bitmap(lc.LedBuffer_work);
         // lc.UpLoad();
-        delay_ms(500);
+        // delay_ms(500);
 
         //眨眼
         self.clear();
@@ -799,7 +797,7 @@ impl Face {
         // zhonglifangxiang_panduan();
         // lc.bitmap(lc.LedBuffer_work);
         // lc.UpLoad();
-        delay_ms(100);
+        // delay_ms(100);
 
         self.clear();
         self.slack_eyes(ex, ey);
@@ -807,7 +805,7 @@ impl Face {
         // zhonglifangxiang_panduan();
         // lc.bitmap(lc.LedBuffer_work);
         // lc.UpLoad();
-        delay_ms(700);
+        // delay_ms(700);
 
         //眨眼
         self.clear();
@@ -819,7 +817,7 @@ impl Face {
         // zhonglifangxiang_panduan();
         // lc.bitmap(lc.LedBuffer_work);
         // lc.UpLoad();
-        delay_ms(100);
+        // delay_ms(100);
 
         self.clear();
         self.slack_eyes(ex, ey);
@@ -827,7 +825,7 @@ impl Face {
         // zhonglifangxiang_panduan();
         // lc.bitmap(lc.LedBuffer_work);
         // lc.UpLoad();
-        delay_ms(700);
+        // delay_ms(700);
 
         //眨眼
         self.clear();
@@ -839,7 +837,7 @@ impl Face {
         // zhonglifangxiang_panduan();
         // lc.bitmap(lc.LedBuffer_work);
         // lc.UpLoad();
-        delay_ms(100);
+        // delay_ms(100);
 
         self.clear();
         self.slack_eyes(ex, ey);
@@ -847,7 +845,7 @@ impl Face {
         // zhonglifangxiang_panduan();
         // lc.bitmap(lc.LedBuffer_work);
         // lc.UpLoad();
-        delay_ms(700);
+        // delay_ms(700);
 
         //微笑
         self.clear();
@@ -856,7 +854,7 @@ impl Face {
         // zhonglifangxiang_panduan();
         // lc.bitmap(lc.LedBuffer_work);
         // lc.UpLoad();
-        delay_ms(1000);
+        // delay_ms(1000);
         // beeper = beeper_old;
     }
 }
