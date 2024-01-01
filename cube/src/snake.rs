@@ -1,4 +1,5 @@
 use alloc::collections::LinkedList;
+use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
 
 use crate::{mapping::num_map, App, Direction, Gd, Position};
 
@@ -38,16 +39,16 @@ impl SnakeGame {
         loop {
             if self.game_over {
                 // TODO 历史最高分动画,音乐
-                // self.draw_score(app);
-                // delay_ms(3000);
+                self.draw_score(app);
+                app.delay.delay_ms(3000_u32);
                 break;
             }
             app.gravity_direction();
             self.r#move(&app.gd);
             // TODO 移动音效,得分音效和画面效果,死亡音效
-            // self.draw(app);
+            self.draw(app);
 
-            // delay_ms(self.waiting_time);
+            app.delay.delay_ms(self.waiting_time);
         }
     }
 
@@ -106,7 +107,7 @@ impl SnakeGame {
                 *s = *s | 1 << 7 - self.food.x;
             }
         }
-        ledc.upload_raw(tmp);
+        ledc.write_bytes(tmp);
     }
 
     fn draw_score<T: hal::i2c::Instance>(&self, app: &mut App<T>) {
@@ -122,7 +123,7 @@ impl SnakeGame {
         (0..8).for_each(|i| app.ledc.buf_work[i] |= sn[i]);
         (0..8).for_each(|i| app.ledc.buf_work[i] >>= 1);
 
-        app.ledc.upload_raw(app.ledc.buf_work);
+        app.ledc.write_bytes(app.ledc.buf_work);
     }
 }
 

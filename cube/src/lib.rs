@@ -1,13 +1,15 @@
 #![no_std]
 #![no_main]
+#![feature(slice_flatten)]
 
 use core::{cell::OnceCell, mem::MaybeUninit};
 
 use bagua::BaGua;
 use dice::Dice;
+use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
 use face::Face;
 use fastrand::Rng;
-use hal::i2c::I2C;
+use hal::{i2c::I2C, Delay};
 use ledc::LedControl;
 use mpu6050_dmp::{
     accel::{AccelF32, AccelFullScale},
@@ -17,6 +19,7 @@ use snake::SnakeGame;
 use timer::Timer;
 use ui::Ui;
 
+#[macro_use]
 extern crate alloc;
 
 mod bagua;
@@ -33,19 +36,17 @@ mod ui;
 #[global_allocator]
 static ALLOCATOR: esp_alloc::EspHeap = esp_alloc::EspHeap::empty();
 
-// static mut RAND: Rng = Rng::with_seed(1);
 static mut RAND: OnceCell<Rng> = OnceCell::new();
 
 pub fn init() {
-    let once = OnceCell::new();
-    once.get_or_init(|| Rng::with_seed(1));
+    unsafe { RAND.get_or_init(|| Rng::with_seed(0x4d595df4d0f33173)) };
 
-    //     const HEAP_SIZE: usize = 32 * 1024;
-    //     static mut HEAP: MaybeUninit<[u8; HEAP_SIZE]> = MaybeUninit::uninit();
-    //
-    //     unsafe {
-    //         ALLOCATOR.init(HEAP.as_mut_ptr() as *mut u8, HEAP_SIZE);
-    //     }
+    const HEAP_SIZE: usize = 32 * 1024;
+    static mut HEAP: MaybeUninit<[u8; HEAP_SIZE]> = MaybeUninit::uninit();
+
+    unsafe {
+        ALLOCATOR.init(HEAP.as_mut_ptr() as *mut u8, HEAP_SIZE);
+    }
 }
 
 /// 左上角为坐标原点,横x,纵y
@@ -125,6 +126,18 @@ enum Gd {
     Left,
 }
 
+impl core::fmt::Display for Gd {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Gd::None => f.write_str("None"),
+            Gd::Up => f.write_str("Up"),
+            Gd::Right => f.write_str("Right"),
+            Gd::Down => f.write_str("Down"),
+            Gd::Left => f.write_str("Left"),
+        }
+    }
+}
+
 /// 小方
 pub struct App<'d, T>
 where
@@ -142,6 +155,7 @@ where
 
     mpu6050: Mpu6050<I2C<'d, T>>,
     ledc: LedControl<'d>,
+    delay: Delay,
 }
 
 impl<'d, T> App<'d, T>
@@ -185,8 +199,8 @@ where
         }
     }
 
-    pub fn new(mpu6050: Mpu6050<I2C<'d, T>>, mut ledc: LedControl<'d>) -> Self {
-        ledc.set_intensity(0x01);
+    pub fn new(delay: Delay, mpu6050: Mpu6050<I2C<'d, T>>, mut ledc: LedControl<'d>) -> Self {
+        ledc.set_brightness(0x01);
 
         App {
             buzzer: true,
@@ -197,6 +211,7 @@ where
 
             mpu6050,
             ledc,
+            delay,
         }
     }
 
@@ -206,22 +221,23 @@ where
 
     pub fn run(mut self) -> ! {
         loop {
-            // FIXME delay_ms(800);
+            self.delay.delay_ms(600_u32);
 
             self.gravity_direction();
+
             if self.gd == Gd::default() {
                 self.ledc
-                    .upload_raw(self.uis[self.ui_current_idx as usize].ui());
+                    .write_bytes(self.uis[self.ui_current_idx as usize].ui());
                 continue;
             }
 
             match self.gd {
                 Gd::None => {
                     self.ledc
-                        .upload_raw(self.uis[self.ui_current_idx as usize].ui());
+                        .write_bytes(self.uis[self.ui_current_idx as usize].ui());
 
                     self.ledc
-                        .upload_raw(self.uis[self.ui_current_idx as usize].ui());
+                        .write_bytes(self.uis[self.ui_current_idx as usize].ui());
                 }
                 Gd::Up => {
                     // 向上进入对应的界面
@@ -242,7 +258,7 @@ where
                         self.ui_current_idx = 0;
                     }
                     self.ledc
-                        .upload_raw(self.uis[self.ui_current_idx as usize].ui());
+                        .write_bytes(self.uis[self.ui_current_idx as usize].ui());
                 }
                 Gd::Left => {
                     self.ui_current_idx -= 1;
@@ -250,7 +266,7 @@ where
                         self.ui_current_idx = self.uis.len() as i8 - 1;
                     }
                     self.ledc
-                        .upload_raw(self.uis[self.ui_current_idx as usize].ui());
+                        .write_bytes(self.uis[self.ui_current_idx as usize].ui());
                 }
                 _ => {}
             }

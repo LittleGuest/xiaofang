@@ -1,3 +1,5 @@
+use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
+
 use crate::{App, RAND};
 
 /// 八卦
@@ -130,7 +132,7 @@ impl BaGua {
                     app.ledc.upload();
                 }
             }
-            // FIXME delay_ms(800);
+            app.delay.delay_ms(800_u32);
 
             // TODO 退出占卦模式
         }

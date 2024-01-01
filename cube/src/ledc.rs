@@ -1,11 +1,20 @@
+use embedded_graphics::{pixelcolor::*, prelude::*};
 use hal::{
     peripherals::SPI2,
     spi::{master::Spi, FullDuplexMode},
+    Delay,
 };
-use smart_leds::{SmartLedsWrite, RGB, RGB8};
+use heapless::Vec;
+use smart_leds_matrix::{
+    layout::{invert_axis::NoInvert, Rectangular},
+    SmartLedMatrix,
+};
 use ws2812_spi::Ws2812;
 
 use crate::Gd;
+
+/// led 数量
+const NUM_LEDS: usize = 64;
 
 pub struct LedControl<'d> {
     /// 初级显存
@@ -13,31 +22,41 @@ pub struct LedControl<'d> {
     /// 最终上传的数据
     buf: [u8; 8],
     pub gd: Gd,
+
+    /// 亮度
+    brightness: u8,
     ws: Ws2812<Spi<'d, SPI2, FullDuplexMode>>,
+    matrix: SmartLedMatrix<Rectangular<NoInvert>, NUM_LEDS>,
+    delay: Delay,
 }
 
 impl<'d> LedControl<'d> {
-    pub fn new(ws: Ws2812<Spi<'d, SPI2, FullDuplexMode>>) -> Self {
+    pub fn new(delay: Delay, spi: Spi<'d, SPI2, FullDuplexMode>) -> Self {
+        let brightness = 10;
+
+        let ws = Ws2812::new(spi);
+        let mut matrix = SmartLedMatrix::<_, { 8 * 8 }>::new(Rectangular::new(8, 8));
+        matrix.set_brightness(brightness);
+        matrix.clear(Rgb888::new(0, 0, 0)).unwrap();
+
         Self {
             buf_work: [0; 8],
             buf: [0; 8],
             gd: Gd::default(),
+            brightness,
             ws,
+            matrix,
+            delay,
         }
-    }
-
-    pub fn write(&mut self) {
-        self.ws.write([RGB8::new(0, 0, 0); 64].into_iter());
-        self.ws.write([RGB8::new(12, 12, 12); 65].into_iter());
     }
 
     pub fn shutdown(&mut self) {
         // self.led.power_off();
     }
 
-    // 设置亮度，亮度范围0x00-0x0F(0-15)
-    pub fn set_intensity(&mut self, intensity: u8) {
-        // self.led.set_intensity(0, intensity);
+    // 设置亮度
+    pub fn set_brightness(&mut self, b: u8) {
+        self.matrix.set_brightness(b)
     }
 
     pub fn clear_work(&mut self) {
@@ -53,16 +72,48 @@ impl<'d> LedControl<'d> {
         self.upload();
     }
 
-    pub fn upload(&mut self) {
-        // if let Err(e) = self.led.write_raw(0, &self.buf) {
-        //     log::error!("{e:?}");
-        // }
+    pub fn clear_with_color(&mut self, color: Rgb888) {
+        if let Err(e) = self.matrix.clear(color) {
+            log::error!("clear_with_color error {e:?}");
+        }
     }
 
-    pub fn upload_raw(&mut self, raw: [u8; 8]) {
-        // if let Err(e) = self.led.write_raw(0, &raw) {
-        //     log::error!("{e:?}");
-        // }
+    pub fn upload(&mut self) {
+        self.write_bytes(self.buf);
+    }
+
+    pub fn write_bytes(&mut self, data: [u8; 8]) {
+        let mut pixels = Vec::<Pixel<Rgb888>, NUM_LEDS>::new();
+        for y in 0..8 {
+            for x in 0..8 {
+                let on_off = if data[y] & (1 << (7 - x)) > 0 {
+                    BinaryColor::On
+                } else {
+                    BinaryColor::Off
+                };
+
+                pixels
+                    .push(Pixel((x, y as i32).into(), on_off.into()))
+                    .unwrap();
+            }
+        }
+        self.write_pixels(pixels);
+    }
+
+    pub fn write_pixels<I>(&mut self, pixels: I)
+    where
+        I: IntoIterator<Item = Pixel<Rgb888>>,
+    {
+        // self.clear_with_color(Rgb888::default());
+        // self.delay.delay_ms(50_u32);
+        self.matrix.draw_iter(pixels).unwrap();
+        if let Err(e) = self.matrix.flush_with_gamma(&mut self.ws) {
+            log::error!("write_rgb {e:?}");
+        }
+    }
+
+    pub fn write_pixel(&mut self, pixel: Pixel<Rgb888>) {
+        self.write_pixels([pixel].into_iter());
     }
 
     /// 设置指定坐标单个led的亮灭

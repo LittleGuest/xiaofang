@@ -1,3 +1,5 @@
+use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
+
 use crate::{App, RAND};
 
 /// 骰子
@@ -81,6 +83,7 @@ impl Dice {
         app.ledc.clear();
         loop {
             let accel = app.accel();
+            log::info!("dice accel is x: {}, y: {}", accel.x(), accel.y());
             // if accel.x().abs() > 0.3 && accel.y().abs() > 0.3 {
             if (accel.x() > 0.3 || accel.x() < -0.3) && (accel.y() > 0.3 || accel.y() < -0.3) {
                 if (0..30)
@@ -93,7 +96,7 @@ impl Dice {
                     app.ledc.upload();
                 }
             }
-            //FIXME delay_ms(800);
+            app.delay.delay_ms(800_u32);
 
             // TODO 推出骰子模式
         }
