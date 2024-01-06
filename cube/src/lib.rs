@@ -2,15 +2,21 @@
 #![no_main]
 #![feature(slice_flatten)]
 
-use core::{cell::OnceCell, mem::MaybeUninit};
+use core::{cell::OnceCell, mem::MaybeUninit, ops::RangeBounds};
 
+use alloc::vec::{IntoIter, Vec};
 use bagua::BaGua;
 use dice::Dice;
+use embedded_graphics_core::{
+    pixelcolor::{BinaryColor, Rgb888},
+    Pixel,
+};
 use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
 use face::Face;
 use fastrand::Rng;
 use hal::{i2c::I2C, Delay};
 use ledc::LedControl;
+use maze::Maze;
 use mpu6050_dmp::{
     accel::{AccelF32, AccelFullScale},
     sensor::Mpu6050,
@@ -94,7 +100,36 @@ impl Position {
             }
         }
     }
+
+    fn random_range(x: impl RangeBounds<i8>, y: impl RangeBounds<i8>) -> Self {
+        // fn random_range(x: i8, y: i8) -> Self {
+        // let mut tr = tinyrand::StdRand::default();
+        // Self {
+        //     x: tr.next_range(1..x as u16) as i8,
+        //     y: tr.next_range(1..x as u16) as i8,
+        // }
+
+        unsafe {
+            Self {
+                x: RAND.get_mut().unwrap().i8(x),
+                y: RAND.get_mut().unwrap().i8(y),
+            }
+        }
+    }
 }
+
+impl From<Position> for Pixel<Rgb888> {
+    fn from(p: Position) -> Self {
+        Self((p.x as i32, p.y as i32).into(), BinaryColor::On.into())
+    }
+}
+
+// impl FromIterator<Position> for Iterator<Item = Pixel<Rgb888>> {}
+// impl From<Vec<Position>> for Vec<Pixel<Rgb888>> {
+//     fn from(value: Vec<Position>) -> Self {
+//         todo!()
+//     }
+// }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Direction {
@@ -138,6 +173,17 @@ impl core::fmt::Display for Gd {
     }
 }
 
+impl From<Direction> for Gd {
+    fn from(v: Direction) -> Self {
+        match v {
+            Direction::Up => Self::Up,
+            Direction::Right => Self::Right,
+            Direction::Down => Self::Down,
+            Direction::Left => Self::Left,
+        }
+    }
+}
+
 /// 小方
 pub struct App<'d, T>
 where
@@ -146,7 +192,7 @@ where
     /// 蜂鸣器开关
     buzzer: bool,
     /// 界面
-    uis: [Ui; 7],
+    uis: Vec<Ui>,
     /// 当前界面的索引
     ui_current_idx: i8,
     /// 表情
@@ -247,8 +293,7 @@ where
                         Ui::Dice => Dice::run(&mut self),
                         Ui::Snake => SnakeGame::new().run(&mut self),
                         Ui::BaGua => BaGua::run(&mut self),
-                        Ui::Maze => {}
-                        Ui::Temp => {}
+                        Ui::Maze => Maze::<13, 13>::new().run(&mut self),
                         Ui::Sound => {}
                     }
                 }

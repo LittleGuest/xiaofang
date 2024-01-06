@@ -85,16 +85,14 @@ impl SnakeGame {
     }
 
     fn create_food(&mut self) {
-        let mut food;
-        loop {
-            food = Food::random(self.width, self.height);
+        self.food = loop {
+            let food = Food::random(self.width, self.height);
             if self.snake.body.iter().any(|s| s.eq(&food)) {
                 continue;
             } else {
-                break;
+                break food;
             }
-        }
-        self.food = food;
+        };
     }
 
     pub fn draw<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
