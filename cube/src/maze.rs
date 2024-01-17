@@ -6,17 +6,11 @@ use embedded_graphics_core::{
 };
 use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
 
-use crate::{App, Gd, Position};
+use crate::{App, CubeRng, Gd, Position, Rng};
 
 /// 迷宫
-/// 左上角为坐标原点
+/// 左上角为坐标原点,所有的坐标都为全局坐标
 /// 如果地图大小大于8*8,led是显示不完整的,就要添加一个视野的效果,地图的内容根据视野来加载
-///
-/// 那么视野怎么移动呢,是根据玩家的位置来移动视野的,但是玩家的位置是不能超过视野范围的
-/// 因为当玩家向前移动时,需要把地图的内容加载到视野中,就是说当玩家移动到视野范围-1或-2时,
-/// 视野范围就需要跟着玩家一起向前运动(也就是视野向后移动)
-/// 当视野范围的边界的地图的边界重叠时,再向前移动,玩家可以靠近边界移动
-///
 #[derive(Debug)]
 pub struct Maze<const W: usize, const H: usize> {
     map: MazeMap<W, H>,
@@ -32,7 +26,7 @@ impl<const W: usize, const H: usize> Maze<W, H> {
         let map = MazeMap::<W, H>::new();
         // 随机玩家坐标
         let pp = loop {
-            let pp = Position::random_range(1..W as i8, 1..H as i8);
+            let pp = Position::random_range_usize(1..W, 1..H);
             let md = map.data[pp.x as usize][pp.y as usize];
             if md.is_none() {
                 break pp;
@@ -40,23 +34,26 @@ impl<const W: usize, const H: usize> Maze<W, H> {
         };
         let player = Player::new(pp);
 
-        // 视野数据根据玩家坐标决定
+        // 设置一个初始视野坐标
         let mut vp = Position::default();
-        vp.x = player.pos.x - 3;
-        vp.y = player.pos.y - 3;
-
-        if player.pos.x - 3 <= 0 {
-            vp.x = 0;
-        }
-        if player.pos.y - 3 <= 0 {
-            vp.y = 0;
-        }
-        if player.pos.x + 5 >= W as i8 {
-            vp.x = W as i8 - 7;
-        }
-        if player.pos.y + 5 >= H as i8 {
-            vp.y = H as i8 - 7;
-        }
+        vp.x = {
+            if player.pos.x - 3 <= 0 {
+                0
+            } else if player.pos.x + 5 >= W as i8 {
+                8 - (W as i8 - player.pos.x) - 3
+            } else {
+                player.pos.x - 3
+            }
+        };
+        vp.y = {
+            if player.pos.y - 3 <= 0 {
+                0
+            } else if player.pos.y + 5 >= W as i8 {
+                8 - (W as i8 - player.pos.y) - 3
+            } else {
+                player.pos.y - 3
+            }
+        };
 
         let mut maze = Maze {
             map,
@@ -65,7 +62,12 @@ impl<const W: usize, const H: usize> Maze<W, H> {
             waiting_time: 300,
             game_over: false,
         };
+
         maze.copy_map_to_vision();
+        maze.map.spos = player.pos;
+        maze.map.cal_epos();
+
+        log::info!("{:?}", maze);
 
         maze
     }
@@ -75,22 +77,25 @@ impl<const W: usize, const H: usize> Maze<W, H> {
         app.gd = Gd::default();
 
         loop {
-            // if self.game_over {
-            //     // TODO 结束动画和音乐
-            //     app.delay.delay_ms(3000_u32);
-            //     log::info!("maze game over");
-            //     break;
-            // }
+            if self.game_over {
+                log::info!("maze game over");
+                // TODO 结束动画和音乐
+                app.delay.delay_ms(3000_u32);
+                break;
+            }
             app.gravity_direction();
 
             log::info!("player pos {:?}", self.player.pos);
             log::info!("vision pos {:?}", self.vision.pos);
+            log::info!("epos {:?}", self.map.epos);
             if !self.hit_wall(app) {
                 self.player.r#move(app);
                 // 玩家移动之后视野数据改变
                 self.update_vision(app);
-            } else {
-                log::info!("hit wall");
+
+                if self.player.pos.x == self.map.epos.x && self.player.pos.y == self.map.epos.y {
+                    self.game_over = true;
+                }
             }
             self.draw(app);
 
@@ -99,23 +104,9 @@ impl<const W: usize, const H: usize> Maze<W, H> {
     }
 
     pub fn draw<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
-        // 将视野数据和玩家数据合并后写入
-        // 视野数据来源于玩家移动后的地图数据
-        // self.map.data.push(self.player.pos);
         app.ledc.clear_with_color(BinaryColor::Off.into());
-        // app.ledc.write_pixels(
-        //     self.vision
-        //         .data
-        //         .iter()
-        //         .flatten()
-        //         .filter(|d| d.is_some())
-        //         .map(|&d| d.unwrap().into())
-        //         .into_iter(),
-        // );
-        // self.player.draw(app);
-
-        // 需要进行坐标转换
         let mut pixels = Vec::<Pixel<Rgb888>>::new();
+        // 将地图坐标转换为led坐标
         for y in 0..8 {
             for x in 0..8 {
                 if self.vision.data[y][x].is_some() {
@@ -123,6 +114,11 @@ impl<const W: usize, const H: usize> Maze<W, H> {
                 }
             }
         }
+        pixels.push(Pixel(
+            (self.map.epos.x as i32, self.map.epos.y as i32).into(),
+            self.map.color_epos,
+        ));
+
         let pp = {
             let pp = self.player.pos;
             let vp = self.vision.pos;
@@ -135,6 +131,7 @@ impl<const W: usize, const H: usize> Maze<W, H> {
         app.ledc.write_pixels(pixels);
     }
 
+    /// 检测是否撞墙
     pub fn hit_wall<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) -> bool {
         let Position { x, y } = self.player.next_pos(app);
         let overlapping =
@@ -143,8 +140,7 @@ impl<const W: usize, const H: usize> Maze<W, H> {
             return true;
         }
         // 检测玩家下一个位置是否有墙
-        let md = self.map.data[y as usize][x as usize];
-        md.is_some()
+        self.map.data[y as usize][x as usize].is_some()
     }
 
     /// 将对应的地图数据复制给视野
@@ -162,7 +158,6 @@ impl<const W: usize, const H: usize> Maze<W, H> {
         let Position { x, y } = self.vision.next_pos(app);
         let overlapping =
             x < 0 || y < 0 || x >= self.map.width as i8 - 7 || y >= self.map.height as i8 - 7;
-        log::info!("vision overlapping : {overlapping}");
         if overlapping {
             return;
         }
@@ -187,14 +182,17 @@ struct MazeMap<const W: usize, const H: usize> {
     spos: Position,
     /// 终点
     epos: Position,
+    /// 终点颜色
+    color_epos: Rgb888,
 }
 
 impl<const W: usize, const H: usize> MazeMap<W, H> {
     fn new() -> Self {
-        // 使用地图生成算法生成地图
-        // TODO 迷宫大小,使用的算法都随机
+        // 使用地图生成算法生成地图 TODO 迷宫大小,使用的算法都随机
         let mut data = [[None; H]; W];
-        let maze = irrgarten::Maze::new(W, H).unwrap().generate();
+        let maze = irrgarten::Maze::new(W, H)
+            .unwrap()
+            .generate(&mut unsafe { CubeRng(Rng.assume_init_mut().random() as u64) });
         for y in 0..H {
             log::info!("{:?}", maze[y]);
             for x in 0..W {
@@ -211,7 +209,28 @@ impl<const W: usize, const H: usize> MazeMap<W, H> {
             color: Rgb888::WHITE,
             spos: Position::default(),
             epos: Position::default(),
+            color_epos: Rgb888::CSS_LIGHT_GREEN,
         }
+    }
+
+    fn cal_epos(&mut self) {
+        let pos = loop {
+            let x =
+                unsafe { CubeRng(Rng.assume_init_mut().random() as u64).random_range(0..W - 1) };
+
+            let y =
+                unsafe { CubeRng(Rng.assume_init_mut().random() as u64).random_range(0..H - 1) };
+
+            if self.data[y][x].is_some() || (self.spos.x as usize == x && self.spos.y as usize == y)
+            {
+                continue;
+            }
+
+            break (x, y);
+        };
+        self.epos = pos.into();
+        // 将终点加入地图
+        // self.data[self.epos.y as usize][self.epos.x as usize] = Some(self.epos);
     }
 }
 
@@ -220,6 +239,7 @@ impl<const W: usize, const H: usize> MazeMap<W, H> {
 struct Vision {
     /// 视野左上角坐标
     pos: Position,
+    /// 视野数据
     data: [[Option<Position>; 8]; 8],
 }
 
@@ -259,24 +279,15 @@ impl Vision {
 }
 
 /// 玩家
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 struct Player {
     pos: Position,
     old_pos: Position,
     color: Rgb888,
-    // poss: Vec<Position>,
 }
 
 impl Player {
     fn new(pos: Position) -> Self {
-        // let width = 2;
-        // let height = 2;
-        // let mut poss = Vec::<Position>::with_capacity(4);
-        // for y in 0..height {
-        //     for x in 0..width {
-        //         poss.push(Position::new(pos.x + x, pos.y + y));
-        //     }
-        // }
         Self {
             pos,
             old_pos: pos,
@@ -319,11 +330,4 @@ impl Player {
             self.color,
         ));
     }
-
-    // fn as_pixels(&mut self) -> Vec<Pixel<Rgb888>> {
-    //     self.poss
-    //         .iter()
-    //         .map(|p| Pixel((p.x as i32, p.y as i32).into(), BinaryColor::On.into()))
-    //         .collect::<Vec<_>>()
-    // }
 }

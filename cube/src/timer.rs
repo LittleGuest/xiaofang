@@ -5,7 +5,7 @@ use embedded_graphics_core::{
 };
 use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
 
-use crate::{App, Position, RAND};
+use crate::{App, CubeRng, Position, Rng};
 
 #[derive(Debug, Clone, Copy)]
 struct TimerPixel {
@@ -91,7 +91,10 @@ impl Timer {
             if timer.pixels.is_empty() {
                 break;
             }
-            let index = unsafe { RAND.get_mut().unwrap().usize(0..timer.pixels.len()) };
+            let index = unsafe {
+                CubeRng(Rng.assume_init_mut().random() as u64)
+                    .random(0, (timer.pixels.len() + 1) as u32)
+            } as usize;
             app.delay.delay_ms(1000_u32);
             let mut pixel = timer.pixels.remove(index);
             pixel.blink(app);

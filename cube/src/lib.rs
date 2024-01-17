@@ -6,6 +6,7 @@ use core::{cell::OnceCell, mem::MaybeUninit, ops::RangeBounds};
 
 use alloc::vec::{IntoIter, Vec};
 use bagua::BaGua;
+use cube_rand::CubeRng;
 use dice::Dice;
 use embedded_graphics_core::{
     pixelcolor::{BinaryColor, Rgb888},
@@ -13,7 +14,6 @@ use embedded_graphics_core::{
 };
 use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
 use face::Face;
-use fastrand::Rng;
 use hal::{i2c::I2C, Delay};
 use ledc::LedControl;
 use maze::Maze;
@@ -22,6 +22,7 @@ use mpu6050_dmp::{
     sensor::Mpu6050,
 };
 use snake::SnakeGame;
+use static_cell::StaticCell;
 use timer::Timer;
 use ui::Ui;
 
@@ -42,12 +43,10 @@ mod ui;
 #[global_allocator]
 static ALLOCATOR: esp_alloc::EspHeap = esp_alloc::EspHeap::empty();
 
-static mut RAND: OnceCell<Rng> = OnceCell::new();
+pub static mut Rng: MaybeUninit<hal::Rng> = MaybeUninit::uninit();
 
 pub fn init() {
-    unsafe { RAND.get_or_init(|| Rng::with_seed(0x4d595df4d0f33173)) };
-
-    const HEAP_SIZE: usize = 32 * 1024;
+    const HEAP_SIZE: usize = 64 * 1024;
     static mut HEAP: MaybeUninit<[u8; HEAP_SIZE]> = MaybeUninit::uninit();
 
     unsafe {
@@ -60,6 +59,14 @@ pub fn init() {
 struct Position {
     x: i8,
     y: i8,
+}
+impl From<(usize, usize)> for Position {
+    fn from(value: (usize, usize)) -> Self {
+        Self {
+            x: value.0 as i8,
+            y: value.1 as i8,
+        }
+    }
 }
 
 impl Position {
@@ -95,24 +102,24 @@ impl Position {
     fn random(x: i8, y: i8) -> Self {
         unsafe {
             Self {
-                x: RAND.get_mut().unwrap().i8(0..x),
-                y: RAND.get_mut().unwrap().i8(0..y),
+                x: CubeRng(Rng.assume_init_mut().random() as u64).random(0, x as u32) as i8,
+                y: CubeRng(Rng.assume_init_mut().random() as u64).random(0, y as u32) as i8,
             }
         }
     }
 
-    fn random_range(x: impl RangeBounds<i8>, y: impl RangeBounds<i8>) -> Self {
-        // fn random_range(x: i8, y: i8) -> Self {
-        // let mut tr = tinyrand::StdRand::default();
-        // Self {
-        //     x: tr.next_range(1..x as u16) as i8,
-        //     y: tr.next_range(1..x as u16) as i8,
-        // }
+    // fn random_range(x: impl RangeBounds<i8>, y: impl RangeBounds<i8>) -> Self {
+    //     Self {
+    //         x: Rng.random_range(x),
+    //         y: Rng.random_range(y),
+    //     }
+    // }
 
+    fn random_range_usize(x: impl RangeBounds<usize>, y: impl RangeBounds<usize>) -> Self {
         unsafe {
             Self {
-                x: RAND.get_mut().unwrap().i8(x),
-                y: RAND.get_mut().unwrap().i8(y),
+                x: CubeRng(Rng.assume_init_mut().random() as u64).random_range(x) as i8,
+                y: CubeRng(Rng.assume_init_mut().random() as u64).random_range(y) as i8,
             }
         }
     }
@@ -293,7 +300,7 @@ where
                         Ui::Dice => Dice::run(&mut self),
                         Ui::Snake => SnakeGame::new().run(&mut self),
                         Ui::BaGua => BaGua::run(&mut self),
-                        Ui::Maze => Maze::<13, 13>::new().run(&mut self),
+                        Ui::Maze => Maze::<11, 11>::new().run(&mut self),
                         Ui::Sound => {}
                     }
                 }

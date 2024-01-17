@@ -31,15 +31,14 @@ smoltcp = { version = "0.10.0", default-features = false, features = [
 embedded-svc = { version = "0.25.0", default-features = false, features = [] }
 embedded-io = "0.4.0"
 heapless = { version = "0.7.14", default-features = false }
-# smart-leds = "0.3.0"
 ws2812-spi = "0.4.0"
 mpu6050-dmp = "0.3.0"
 # max7219 = "0.4.0"
+static_cell = { version = "2.0.0" }
 embedded-hal = "0.2.7"
-fastrand = { version = "2.0.1", default-features = false }
-# smart-leds-matrix = { git = "https://github.com/smart-leds-rs/smart-leds-matrix.git" }
 smart-leds-matrix = { path = "../smart-leds-matrix/" }
+cube_rand = { path = "../cube_rand/" }
 irrgarten = { path = "../irrgarten/" }
 embedded-graphics = "0.8.1"
 embedded-graphics-core = "0.4.0"
-tinyrand = "0.5.0"
+rand = { version = "0.8.5", default-features = false, features = ["small_rng"] }

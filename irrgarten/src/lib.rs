@@ -121,6 +121,7 @@ use alloc::vec::Vec;
 use core::convert::TryInto;
 use core::ops::{Add, Index, IndexMut, Mul};
 use core::slice::{Iter, IterMut};
+use rand::{prelude::SliceRandom, Rng};
 
 #[macro_use]
 extern crate alloc;
@@ -221,9 +222,9 @@ impl IntoIterator for Maze {
 impl Maze {
     /// Construct the maze. Only odd values >= 5 can be passed.
     pub fn new(width: usize, height: usize) -> Result<Self, MazeGenerationError> {
-        if width < 5 || width % 2 == 0 || height < 5 || height % 2 == 0 {
-            return Err(MazeGenerationError::InvalidDimensions);
-        }
+        // if width < 5 || width % 2 == 0 || height < 5 || height % 2 == 0 {
+        //     return Err(MazeGenerationError::InvalidDimensions);
+        // }
         Ok(Self {
             width,
             height,
@@ -242,7 +243,10 @@ impl Maze {
     }
 
     /// Generate the maze data.
-    pub fn generate(mut self) -> Self {
+    pub fn generate<R>(mut self, rng: &mut R) -> Self
+    where
+        R: Rng + ?Sized,
+    {
         // This basically uses a recursive backtracking algorithm. However, it was
         // modified to be iterative. Since we model walls as tiles, we need
         // to carve two cells per iteration (carve through the walls).
@@ -261,7 +265,7 @@ impl Maze {
 
                 // go in random direction
                 let mut dirs = ALL_DIRS.clone();
-                // FIXME dirs.shuffle(rng);
+                dirs.shuffle(rng);
                 for dir in dirs {
                     let step = match dir {
                         Direction::North => TinyVec { x: 0, y: -1 },

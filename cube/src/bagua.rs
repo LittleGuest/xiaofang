@@ -1,6 +1,6 @@
 use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
 
-use crate::{App, RAND};
+use crate::{App, CubeRng, Rng};
 
 /// 八卦
 #[derive(Debug)]
@@ -113,7 +113,8 @@ impl BaGua {
     }
 
     fn random() -> [u8; 8] {
-        let num = unsafe { RAND.get_mut().unwrap().u8(1..=8) };
+        let num =
+            unsafe { CubeRng(Rng.assume_init_mut().random() as u64).random(1, 9 as u32) } as u8;
         Self::bagua(num)
     }
 

@@ -1,6 +1,6 @@
 use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
 
-use crate::{App, RAND};
+use crate::{App, CubeRng, Rng};
 
 /// 骰子
 #[derive(Debug)]
@@ -75,7 +75,8 @@ impl Dice {
     }
 
     pub fn random() -> [u8; 8] {
-        let num = unsafe { RAND.get_mut().unwrap().u8(1..=6) };
+        let num =
+            unsafe { CubeRng(Rng.assume_init_mut().random() as u64).random(1, 7 as u32) } as u8;
         Self::dice(num)
     }
 
@@ -83,7 +84,6 @@ impl Dice {
         app.ledc.clear();
         loop {
             let accel = app.accel();
-            log::info!("dice accel is x: {}, y: {}", accel.x(), accel.y());
             // if accel.x().abs() > 0.3 && accel.y().abs() > 0.3 {
             if (accel.x() > 0.3 || accel.x() < -0.3) && (accel.y() > 0.3 || accel.y() < -0.3) {
                 if (0..30)

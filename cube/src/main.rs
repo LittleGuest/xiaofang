@@ -53,6 +53,8 @@ fn main() -> ! {
     );
     let ledc = LedControl::new(delay, spi);
 
+    let rng = hal::Rng::new(peripherals.RNG);
+    unsafe { cube::Rng.write(rng) };
     cube::init();
     cube::App::new(delay, mpu, ledc).run()
 }

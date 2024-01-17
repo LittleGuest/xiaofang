@@ -14,3 +14,4 @@ categories = ["game-development"]
 doctest = false
 
 [dependencies]
+rand = { version = "0.8", default-features = false }
