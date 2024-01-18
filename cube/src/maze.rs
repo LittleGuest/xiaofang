@@ -114,10 +114,16 @@ impl<const W: usize, const H: usize> Maze<W, H> {
                 }
             }
         }
-        pixels.push(Pixel(
-            (self.map.epos.x as i32, self.map.epos.y as i32).into(),
-            self.map.color_epos,
-        ));
+
+        let pp = {
+            let pp = self.map.epos;
+            let vp = self.vision.pos;
+            Pixel(
+                ((pp.x - vp.x) as i32, (pp.y - vp.y) as i32).into(),
+                self.map.color_epos,
+            )
+        };
+        pixels.push(pp);
 
         let pp = {
             let pp = self.player.pos;
