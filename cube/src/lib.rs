@@ -300,7 +300,13 @@ where
                         Ui::Dice => Dice::run(&mut self),
                         Ui::Snake => SnakeGame::new().run(&mut self),
                         Ui::BaGua => BaGua::run(&mut self),
-                        Ui::Maze => Maze::<11, 11>::new().run(&mut self),
+                        Ui::Maze => {
+                            let cr = unsafe {
+                                CubeRng(Rng.assume_init_mut().random() as u64).random_range(19..=33)
+                                    as usize
+                            };
+                            Maze::new(cr, cr).run(&mut self);
+                        }
                         Ui::Sound => {}
                     }
                 }

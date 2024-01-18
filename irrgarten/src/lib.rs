@@ -219,6 +219,15 @@ impl IntoIterator for Maze {
     }
 }
 
+impl core::fmt::Display for Maze {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        for d in &self.data {
+            writeln!(f, "{:?}", d)?;
+        }
+        Ok(())
+    }
+}
+
 impl Maze {
     /// Construct the maze. Only odd values >= 5 can be passed.
     pub fn new(width: usize, height: usize) -> Result<Self, MazeGenerationError> {

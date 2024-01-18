@@ -12,8 +12,8 @@ use crate::{App, CubeRng, Gd, Position, Rng};
 /// 左上角为坐标原点,所有的坐标都为全局坐标
 /// 如果地图大小大于8*8,led是显示不完整的,就要添加一个视野的效果,地图的内容根据视野来加载
 #[derive(Debug)]
-pub struct Maze<const W: usize, const H: usize> {
-    map: MazeMap<W, H>,
+pub struct Maze {
+    map: MazeMap,
     player: Player,
     vision: Vision,
     /// ms
@@ -21,12 +21,12 @@ pub struct Maze<const W: usize, const H: usize> {
     game_over: bool,
 }
 
-impl<const W: usize, const H: usize> Maze<W, H> {
-    pub fn new() -> Self {
-        let map = MazeMap::<W, H>::new();
+impl Maze {
+    pub fn new(width: usize, height: usize) -> Self {
+        let map = MazeMap::new(width, height);
         // 随机玩家坐标
         let pp = loop {
-            let pp = Position::random_range_usize(1..W, 1..H);
+            let pp = Position::random_range_usize(1..width, 1..height);
             let md = map.data[pp.x as usize][pp.y as usize];
             if md.is_none() {
                 break pp;
@@ -39,8 +39,9 @@ impl<const W: usize, const H: usize> Maze<W, H> {
         vp.x = {
             if player.pos.x - 3 <= 0 {
                 0
-            } else if player.pos.x + 5 >= W as i8 {
-                8 - (W as i8 - player.pos.x) - 3
+            } else if player.pos.x + 5 >= width as i8 {
+                // W as i8 - 8 + (W as i8 - player.pos.x) - 1
+                player.pos.x - 8 + width as i8 - player.pos.x
             } else {
                 player.pos.x - 3
             }
@@ -48,8 +49,9 @@ impl<const W: usize, const H: usize> Maze<W, H> {
         vp.y = {
             if player.pos.y - 3 <= 0 {
                 0
-            } else if player.pos.y + 5 >= W as i8 {
-                8 - (W as i8 - player.pos.y) - 3
+            } else if player.pos.y + 5 >= height as i8 {
+                // H as i8 - 8 + (H as i8 - player.pos.y) - 1
+                player.pos.y - 8 + height as i8 - player.pos.y
             } else {
                 player.pos.y - 3
             }
@@ -67,7 +69,7 @@ impl<const W: usize, const H: usize> Maze<W, H> {
         maze.map.spos = player.pos;
         maze.map.cal_epos();
 
-        log::info!("{:?}", maze);
+        // log::info!("{:?}", maze);
 
         maze
     }
@@ -85,9 +87,9 @@ impl<const W: usize, const H: usize> Maze<W, H> {
             }
             app.gravity_direction();
 
-            log::info!("player pos {:?}", self.player.pos);
-            log::info!("vision pos {:?}", self.vision.pos);
-            log::info!("epos {:?}", self.map.epos);
+            // log::info!("player pos {:?}", self.player.pos);
+            // log::info!("vision pos {:?}", self.vision.pos);
+            // log::info!("epos {:?}", self.map.epos);
             if !self.hit_wall(app) {
                 self.player.r#move(app);
                 // 玩家移动之后视野数据改变
@@ -175,13 +177,13 @@ impl<const W: usize, const H: usize> Maze<W, H> {
 
 /// 迷宫地图
 #[derive(Debug)]
-struct MazeMap<const W: usize, const H: usize> {
+struct MazeMap {
     /// 宽度
     width: usize,
     /// 长度
     height: usize,
     /// 地图数据
-    data: [[Option<Position>; H]; W],
+    data: Vec<Vec<Option<Position>>>,
     /// 地图颜色
     color: Rgb888,
     /// 起点
@@ -192,16 +194,25 @@ struct MazeMap<const W: usize, const H: usize> {
     color_epos: Rgb888,
 }
 
-impl<const W: usize, const H: usize> MazeMap<W, H> {
-    fn new() -> Self {
+impl MazeMap {
+    fn new(width: usize, height: usize) -> Self {
         // 使用地图生成算法生成地图 TODO 迷宫大小,使用的算法都随机
-        let mut data = [[None; H]; W];
-        let maze = irrgarten::Maze::new(W, H)
+        let mut data = Vec::<Vec<Option<Position>>>::with_capacity(height);
+        for _ in 0..height {
+            let mut tmp = Vec::<Option<Position>>::with_capacity(width);
+            for _ in 0..width {
+                tmp.push(None);
+            }
+            data.push(tmp);
+        }
+
+        let maze = irrgarten::Maze::new(width, height)
             .unwrap()
             .generate(&mut unsafe { CubeRng(Rng.assume_init_mut().random() as u64) });
-        for y in 0..H {
-            log::info!("{:?}", maze[y]);
-            for x in 0..W {
+        log::info!("\n{maze}\n");
+
+        for y in 0..height {
+            for x in 0..width {
                 if maze[y][x] == 1 {
                     data[y][x] = Some(Position::new(x as i8, y as i8));
                 }
@@ -209,8 +220,8 @@ impl<const W: usize, const H: usize> MazeMap<W, H> {
         }
 
         Self {
-            width: W,
-            height: H,
+            width,
+            height,
             data,
             color: Rgb888::WHITE,
             spos: Position::default(),
@@ -221,11 +232,13 @@ impl<const W: usize, const H: usize> MazeMap<W, H> {
 
     fn cal_epos(&mut self) {
         let pos = loop {
-            let x =
-                unsafe { CubeRng(Rng.assume_init_mut().random() as u64).random_range(0..W - 1) };
+            let x = unsafe {
+                CubeRng(Rng.assume_init_mut().random() as u64).random_range(0..self.width - 1)
+            };
 
-            let y =
-                unsafe { CubeRng(Rng.assume_init_mut().random() as u64).random_range(0..H - 1) };
+            let y = unsafe {
+                CubeRng(Rng.assume_init_mut().random() as u64).random_range(0..self.height - 1)
+            };
 
             if self.data[y][x].is_some() || (self.spos.x as usize == x && self.spos.y as usize == y)
             {
