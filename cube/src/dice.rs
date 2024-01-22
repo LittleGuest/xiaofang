@@ -1,6 +1,6 @@
 use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
 
-use crate::{App, CubeRng, Rng};
+use crate::{App, CubeRng, RNG};
 
 /// 骰子
 #[derive(Debug)]
@@ -75,8 +75,7 @@ impl Dice {
     }
 
     pub fn random() -> [u8; 8] {
-        let num =
-            unsafe { CubeRng(Rng.assume_init_mut().random() as u64).random(1, 7 as u32) } as u8;
+        let num = unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random(1, 7_u32) } as u8;
         Self::dice(num)
     }
 
@@ -85,16 +84,16 @@ impl Dice {
         loop {
             let accel = app.accel();
             // if accel.x().abs() > 0.3 && accel.y().abs() > 0.3 {
-            if (accel.x() > 0.3 || accel.x() < -0.3) && (accel.y() > 0.3 || accel.y() < -0.3) {
-                if (0..30)
+            if (accel.x() > 0.3 || accel.x() < -0.3)
+                && (accel.y() > 0.3 || accel.y() < -0.3)
+                && (0..30)
                     // .map(|_| (app.accel().x().abs(), app.accel().y().abs()))
                     // .any(|(x, y)| x > 0.3 && y > 0.3)
                     .map(|_| (app.accel().x(), app.accel().y()))
-                    .any(|(x, y)| (x > 0.3 || x < -0.3) && (y > 0.3 || y < -0.3))
-                {
-                    app.ledc.bitmap(Self::random());
-                    app.ledc.upload();
-                }
+                    .any(|(x, y)| !(-0.3..=0.3).contains(&x) && !(-0.3..=0.3).contains(&y))
+            {
+                app.ledc.bitmap(Self::random());
+                app.ledc.upload();
             }
             app.delay.delay_ms(800_u32);
 

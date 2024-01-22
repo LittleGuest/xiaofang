@@ -1,3 +1,4 @@
+#![allow(unused)]
 use crate::App;
 
 /// 表情
@@ -163,7 +164,7 @@ impl Face {
     }
 
     /// 休眠表情
-    pub fn dormancy_face<T: hal::i2c::Instance>(&mut self, app: &App<T>) {
+    pub fn dormancy_face<T: hal::i2c::Instance>(&mut self, _app: &App<T>) {
         // byte beeper_old = beeper;
         // beeper = 1;
         let ex: u8 = 1;
@@ -770,9 +771,9 @@ impl Face {
     }
 
     /// FIXME 破记录
-    pub fn break_record_face<T: hal::i2c::Instance>(&mut self, app: &App<T>) {
+    pub fn break_record_face<T: hal::i2c::Instance>(&mut self, _app: &App<T>) {
         // TODO 开启声音
-        let beeper: u8 = 1;
+        let _beeper: u8 = 1;
 
         let ex = 1;
         let ey = 4;

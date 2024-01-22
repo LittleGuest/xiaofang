@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 /// 数字0
 #[rustfmt::skip]
 pub const NUM_0: [u8; 8] = [
@@ -143,7 +145,6 @@ pub const ALL_ON: [u8; 8] = [
 
 pub const fn num_map(num: u8) -> [u8; 8] {
     match num {
-        0 => NUM_0,
         1 => NUM_1,
         2 => NUM_2,
         3 => NUM_3,
@@ -153,6 +154,6 @@ pub const fn num_map(num: u8) -> [u8; 8] {
         7 => NUM_7,
         8 => NUM_8,
         9 => NUM_9,
-        _ => NUM_9,
+        _ => NUM_0,
     }
 }

@@ -1,23 +1,13 @@
 #![no_std]
 #![no_main]
 
-use embedded_graphics::{
-    pixelcolor::*,
-    prelude::*,
-    primitives::{PrimitiveStyleBuilder, Rectangle},
-};
-
 use cube::ledc::LedControl;
 use esp_backtrace as _;
 use hal::spi::master::Spi;
 use hal::spi::SpiMode;
 use hal::{clock::ClockControl, i2c::I2C, peripherals::Peripherals, prelude::*, Delay, IO};
-use heapless::Vec;
 use mpu6050_dmp::address::Address;
 use mpu6050_dmp::sensor::Mpu6050;
-use smart_leds_matrix::layout::Rectangular;
-use smart_leds_matrix::SmartLedMatrix;
-use ws2812_spi::Ws2812;
 
 #[entry]
 fn main() -> ! {
@@ -54,7 +44,8 @@ fn main() -> ! {
     let ledc = LedControl::new(delay, spi);
 
     let rng = hal::Rng::new(peripherals.RNG);
-    unsafe { cube::Rng.write(rng) };
+    unsafe { cube::RNG.write(rng) };
+
     cube::init();
     cube::App::new(delay, mpu, ledc).run()
 }

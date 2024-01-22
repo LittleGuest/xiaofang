@@ -21,13 +21,13 @@ pub struct LedControl<'d> {
     pub buf_work: [u8; 8],
     /// 最终上传的数据
     buf: [u8; 8],
-    pub gd: Gd,
+    gd: Gd,
 
     /// 亮度
-    brightness: u8,
+    _brightness: u8,
     ws: Ws2812<Spi<'d, SPI2, FullDuplexMode>>,
     matrix: SmartLedMatrix<Rectangular<NoInvert>, NUM_LEDS>,
-    delay: Delay,
+    _delay: Delay,
 }
 
 impl<'d> LedControl<'d> {
@@ -43,10 +43,10 @@ impl<'d> LedControl<'d> {
             buf_work: [0; 8],
             buf: [0; 8],
             gd: Gd::default(),
-            brightness,
+            _brightness: brightness,
             ws,
             matrix,
-            delay,
+            _delay: delay,
         }
     }
 
@@ -84,7 +84,7 @@ impl<'d> LedControl<'d> {
 
     pub fn write_bytes(&mut self, data: [u8; 8]) {
         let mut pixels = Vec::<Pixel<Rgb888>, NUM_LEDS>::new();
-        for y in 0..8 {
+        for (y, _) in data.iter().enumerate() {
             for x in 0..8 {
                 let on_off = if data[y] & (1 << (7 - x)) > 0 {
                     BinaryColor::On
@@ -113,7 +113,7 @@ impl<'d> LedControl<'d> {
     }
 
     pub fn write_pixel(&mut self, pixel: Pixel<Rgb888>) {
-        self.write_pixels([pixel].into_iter());
+        self.write_pixels([pixel]);
     }
 
     /// 设置指定坐标单个led的亮灭
@@ -123,9 +123,9 @@ impl<'d> LedControl<'d> {
         }
         let y = y as usize;
         if on {
-            self.buf_work[y] = self.buf_work[y] | (1 << (7 - x));
+            self.buf_work[y] |= 1 << (7 - x);
         } else {
-            self.buf_work[y] = self.buf_work[y] & (!(1 << (7 - x)));
+            self.buf_work[y] &= !(1 << (7 - x));
         }
     }
 
@@ -136,9 +136,9 @@ impl<'d> LedControl<'d> {
         }
         let y = y as usize;
         if on {
-            self.buf[y] = self.buf[y] | (1 << (7 - x));
+            self.buf[y] |= 1 << (7 - x);
         } else {
-            self.buf[y] = self.buf[y] & (!(1 << (7 - x)));
+            self.buf[y] &= !(1 << (7 - x));
         }
     }
 
@@ -168,9 +168,7 @@ impl<'d> LedControl<'d> {
         // 默认重力方向为下3
         // 根据当前方向和按键输入，更新蛇头移动方向
         log::info!("ledc.gd => {:?}", self.gd);
-        for i in 0..8 {
-            self.buf[i] = buf[i];
-        }
+        self.buf.copy_from_slice(&buf);
         // match self.gd {
         //     Gd::None => {}
         //     Gd::Up => {
@@ -211,7 +209,7 @@ impl<'d> LedControl<'d> {
 
     /// 按某个方向滚动
     /// 把后级缓存里的内容按某个方向滚动一格
-    pub fn roll(&mut self, gd: &Gd) {
+    fn _roll(&mut self, gd: &Gd) {
         // 左右，上下，左右速度，上下速度
         // 把后级缓存里的内容按某个方向滚动一格
         // 左右，上下，某个方向不滚动的话就设置为0
@@ -223,14 +221,14 @@ impl<'d> LedControl<'d> {
                 self.buf[7] = 0;
             }
             Gd::Right => {
-                (0..8).for_each(|i| self.buf[i] = self.buf[i] >> 1);
+                (0..8).for_each(|i| self.buf[i] >>= 1);
             }
             Gd::Down => {
                 (1..7).rev().for_each(|i| self.buf[i] = self.buf[i - 1]);
                 self.buf[0] = 0;
             }
             Gd::Left => {
-                (0..8).for_each(|i| self.buf[i] = self.buf[i] << 1);
+                (0..8).for_each(|i| self.buf[i] <<= 1);
             }
         }
     }

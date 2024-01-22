@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 /// 电池电量
 #[rustfmt::skip]
 pub const BATTERY_0: [u8; 8] = [

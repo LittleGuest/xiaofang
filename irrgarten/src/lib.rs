@@ -62,60 +62,6 @@
 //!
 //! You will also need to choose a random number generator. For the following example,
 //! we simply use the [rand](https://crates.io/crates/rand) crate.
-//!
-//! # Example: Simple maze generation
-//!
-//! ```rust
-//! use irrgarten::Maze;
-//! use rand;
-//!
-//! fn main() {
-//!     let mut rng = rand::thread_rng();
-//!     
-//!     // Full maze generation. The dimensions can be any odd number that is > 5.
-//!     let maze = Maze::new(63, 31).unwrap().generate(&mut rng);
-//!     
-//!     // The generated maze data can be accessed via index:
-//!     for y in 0..maze.height {
-//!         for x in 0..maze.width {
-//!             println!("{}", maze[x][y]);
-//!         }
-//!     }
-//!     // Alternatively, Maze also provides into_iter(), iter() and iter_mut()
-//!     // methods to iterate over the columns.
-//! }
-//! ```
-//!
-//! # Example: Generate an image of the maze (for easy inspection/prototyping)
-//!
-//! ```rust
-//! use irrgarten::Maze;
-//! use rand;
-//! use std::fs;
-//!
-//! fn main() {
-//!     let mut rng = rand::thread_rng();
-//!     let maze = Maze::new(255, 255).unwrap().generate(&mut rng);
-//!
-//!     // Save image to disk. Can be opened with most image viewers.
-//!     fs::write("maze.pbm", maze.to_pbm()).unwrap();
-//! }
-//! ```
-//!
-//! # Example: Use a different random number generator with a seed
-//!
-//! Using the [xoshiro](https://crates.io/crates/rand_xoshiro) generator:
-//!
-//! ```rust
-//! use irrgarten::Maze;
-//! use rand_xoshiro::rand_core::SeedableRng;
-//! use rand_xoshiro::Xoshiro256Plus;
-//!
-//! fn main() {
-//!     let mut rng = Xoshiro256Plus::seed_from_u64(123123123);
-//!     let maze = Maze::new(4095, 4095).unwrap().generate(&mut rng);
-//! }
-//! ```
 
 use alloc::vec::Vec;
 use core::convert::TryInto;
@@ -192,7 +138,7 @@ pub struct Maze {
     pub width: usize,
     /// Height of the maze. Must be an odd number >= 5.
     pub height: usize,
-
+    /// map data
     pub data: Vec<Vec<u8>>,
 }
 
@@ -264,16 +210,14 @@ impl Maze {
         let start = TinyVec { x: 1, y: 1 };
         stack.push((start, start));
 
-        while !stack.is_empty() {
-            let (path, cell) = stack.pop().unwrap();
-
+        while let Some((path, cell)) = stack.pop() {
             if self.data[cell.x as usize][cell.y as usize] == TILE_WALL {
                 // clear the path up to the cell
                 self.data[path.x as usize][path.y as usize] = TILE_FLOOR;
                 self.data[cell.x as usize][cell.y as usize] = TILE_FLOOR;
 
                 // go in random direction
-                let mut dirs = ALL_DIRS.clone();
+                let mut dirs = ALL_DIRS;
                 dirs.shuffle(rng);
                 for dir in dirs {
                     let step = match dir {

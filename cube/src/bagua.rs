@@ -1,8 +1,9 @@
 use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
 
-use crate::{App, CubeRng, Rng};
+use crate::{App, CubeRng, RNG};
 
 /// 八卦
+#[allow(unused)]
 #[derive(Debug)]
 pub enum BaGua {
     Qian,
@@ -18,7 +19,7 @@ pub enum BaGua {
 impl BaGua {
     #[rustfmt::skip]
     fn bagua(num: u8) -> [u8; 8] {
-        let gua = match num {
+        match num {
             // 八卦：乾
             1 => [
                 0b11111111,
@@ -108,13 +109,11 @@ impl BaGua {
                 0b11100111,
             ],
             _ => [0; 8],
-        };
-        gua
+        }
     }
 
     fn random() -> [u8; 8] {
-        let num =
-            unsafe { CubeRng(Rng.assume_init_mut().random() as u64).random(1, 9 as u32) } as u8;
+        let num = unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random(1, 9_u32) } as u8;
         Self::bagua(num)
     }
 
@@ -122,16 +121,16 @@ impl BaGua {
         app.ledc.clear();
         loop {
             let accel = app.accel();
-            if (accel.x() > 0.3 || accel.x() < -0.3) && (accel.y() > 0.3 || accel.y() < -0.3) {
-                if (0..30)
+            if (accel.x() > 0.3 || accel.x() < -0.3)
+                && (accel.y() > 0.3 || accel.y() < -0.3)
+                && (0..30)
                     // .map(|_| (app.accel().x().abs(), app.accel().y().abs()))
                     // .any(|(x, y)| x > 0.3 && y > 0.3)
                     .map(|_| (app.accel().x(), app.accel().y()))
-                    .any(|(x, y)| (x > 0.3 || x < -0.3) && (y > 0.3 || y < -0.3))
-                {
-                    app.ledc.bitmap(Self::random());
-                    app.ledc.upload();
-                }
+                    .any(|(x, y)| !(-0.3..=0.3).contains(&x) && !(-0.3..=0.3).contains(&y))
+            {
+                app.ledc.bitmap(Self::random());
+                app.ledc.upload();
             }
             app.delay.delay_ms(800_u32);
 

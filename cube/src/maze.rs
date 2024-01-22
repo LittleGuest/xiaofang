@@ -6,7 +6,7 @@ use embedded_graphics_core::{
 };
 use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
 
-use crate::{App, CubeRng, Gd, Position, Rng};
+use crate::{App, CubeRng, Gd, Position, RNG};
 
 /// 迷宫
 /// 左上角为坐标原点,所有的坐标都为全局坐标
@@ -35,8 +35,7 @@ impl Maze {
         let player = Player::new(pp);
 
         // 设置一个初始视野坐标
-        let mut vp = Position::default();
-        vp.x = {
+        let vpx = {
             if player.pos.x - 3 <= 0 {
                 0
             } else if player.pos.x + 5 >= width as i8 {
@@ -46,7 +45,7 @@ impl Maze {
                 player.pos.x - 3
             }
         };
-        vp.y = {
+        let vpy = {
             if player.pos.y - 3 <= 0 {
                 0
             } else if player.pos.y + 5 >= height as i8 {
@@ -60,7 +59,7 @@ impl Maze {
         let mut maze = Maze {
             map,
             player,
-            vision: Vision::new(vp),
+            vision: Vision::new(Position::new(vpx, vpy)),
             waiting_time: 300,
             game_over: false,
         };
@@ -156,7 +155,7 @@ impl Maze {
         let Position { x, y } = self.vision.pos;
         for (iy, y) in (y..(y + 8)).enumerate() {
             for (ix, x) in (x..(x + 8)).enumerate() {
-                self.vision.data[iy as usize][ix as usize] = self.map.data[y as usize][x as usize];
+                self.vision.data[iy][ix] = self.map.data[y as usize][x as usize];
             }
         }
     }
@@ -208,7 +207,7 @@ impl MazeMap {
 
         let maze = irrgarten::Maze::new(width, height)
             .unwrap()
-            .generate(&mut unsafe { CubeRng(Rng.assume_init_mut().random() as u64) });
+            .generate(&mut unsafe { CubeRng(RNG.assume_init_mut().random() as u64) });
         log::info!("\n{maze}\n");
 
         for y in 0..height {
@@ -233,11 +232,11 @@ impl MazeMap {
     fn cal_epos(&mut self) {
         let pos = loop {
             let x = unsafe {
-                CubeRng(Rng.assume_init_mut().random() as u64).random_range(0..self.width - 1)
+                CubeRng(RNG.assume_init_mut().random() as u64).random_range(0..self.width - 1)
             };
 
             let y = unsafe {
-                CubeRng(Rng.assume_init_mut().random() as u64).random_range(0..self.height - 1)
+                CubeRng(RNG.assume_init_mut().random() as u64).random_range(0..self.height - 1)
             };
 
             if self.data[y][x].is_some() || (self.spos.x as usize == x && self.spos.y as usize == y)
@@ -281,7 +280,7 @@ impl Vision {
     }
 
     fn next_pos<T: hal::i2c::Instance>(&self, app: &mut App<T>) -> Position {
-        let mut pos = (*self).pos;
+        let mut pos = self.pos;
         match app.gd {
             Gd::None => {}
             Gd::Up => pos.y -= 1,
@@ -315,7 +314,7 @@ impl Player {
     }
 
     fn next_pos<T: hal::i2c::Instance>(&self, app: &mut App<T>) -> Position {
-        let mut pos = (*self).pos;
+        let mut pos = self.pos;
         match app.gd {
             Gd::None => {}
             Gd::Up => pos.y -= 1,
@@ -331,22 +330,22 @@ impl Player {
         self.pos = self.next_pos(app);
     }
 
-    fn draw<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
-        self.draw_off(app);
-        self.draw_on(app);
-    }
-
-    fn draw_off<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
-        app.ledc.write_pixel(Pixel(
-            (self.old_pos.x as i32, self.old_pos.y as i32).into(),
-            BinaryColor::Off.into(),
-        ));
-    }
-
-    fn draw_on<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
-        app.ledc.write_pixel(Pixel(
-            (self.pos.x as i32, self.pos.y as i32).into(),
-            self.color,
-        ));
-    }
+    // fn draw<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    //     self.draw_off(app);
+    //     self.draw_on(app);
+    // }
+    //
+    // fn draw_off<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    //     app.ledc.write_pixel(Pixel(
+    //         (self.old_pos.x as i32, self.old_pos.y as i32).into(),
+    //         BinaryColor::Off.into(),
+    //     ));
+    // }
+    //
+    // fn draw_on<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    //     app.ledc.write_pixel(Pixel(
+    //         (self.pos.x as i32, self.pos.y as i32).into(),
+    //         self.color,
+    //     ));
+    // }
 }

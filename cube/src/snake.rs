@@ -102,7 +102,7 @@ impl SnakeGame {
         let mut tmp = self.snake.as_bytes();
         for (i, s) in tmp.iter_mut().enumerate() {
             if i == self.food.y as usize {
-                *s = *s | 1 << 7 - self.food.x;
+                *s |= 1 << (7 - self.food.x);
             }
         }
         ledc.write_bytes(tmp);
@@ -179,7 +179,7 @@ impl Snake {
             let mut tmp = 0;
             for x in 0..8 {
                 if self.body.iter().any(|p| p.x == x && p.y == y) {
-                    tmp = tmp | 1 << 7 - x;
+                    tmp |= 1 << (7 - x);
                 }
             }
             bs[y as usize] = tmp;

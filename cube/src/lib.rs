@@ -2,9 +2,9 @@
 #![no_main]
 #![feature(slice_flatten)]
 
-use core::{cell::OnceCell, mem::MaybeUninit, ops::RangeBounds};
+use core::{mem::MaybeUninit, ops::RangeBounds};
 
-use alloc::vec::{IntoIter, Vec};
+use alloc::vec::Vec;
 use bagua::BaGua;
 use cube_rand::CubeRng;
 use dice::Dice;
@@ -13,7 +13,6 @@ use embedded_graphics_core::{
     Pixel,
 };
 use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
-use face::Face;
 use hal::{i2c::I2C, Delay};
 use ledc::LedControl;
 use maze::Maze;
@@ -22,11 +21,10 @@ use mpu6050_dmp::{
     sensor::Mpu6050,
 };
 use snake::SnakeGame;
-use static_cell::StaticCell;
+
 use timer::Timer;
 use ui::Ui;
 
-#[macro_use]
 extern crate alloc;
 
 mod bagua;
@@ -43,7 +41,7 @@ mod ui;
 #[global_allocator]
 static ALLOCATOR: esp_alloc::EspHeap = esp_alloc::EspHeap::empty();
 
-pub static mut Rng: MaybeUninit<hal::Rng> = MaybeUninit::uninit();
+pub static mut RNG: MaybeUninit<hal::Rng> = MaybeUninit::uninit();
 
 pub fn init() {
     const HEAP_SIZE: usize = 64 * 1024;
@@ -74,7 +72,7 @@ impl Position {
         Position { x, y }
     }
 
-    fn r#move(&mut self, d: Direction) {
+    fn r#_move(&mut self, d: Direction) {
         match d {
             Direction::Up => {
                 self.y -= 1;
@@ -102,8 +100,8 @@ impl Position {
     fn random(x: i8, y: i8) -> Self {
         unsafe {
             Self {
-                x: CubeRng(Rng.assume_init_mut().random() as u64).random(0, x as u32) as i8,
-                y: CubeRng(Rng.assume_init_mut().random() as u64).random(0, y as u32) as i8,
+                x: CubeRng(RNG.assume_init_mut().random() as u64).random(0, x as u32) as i8,
+                y: CubeRng(RNG.assume_init_mut().random() as u64).random(0, y as u32) as i8,
             }
         }
     }
@@ -118,8 +116,8 @@ impl Position {
     fn random_range_usize(x: impl RangeBounds<usize>, y: impl RangeBounds<usize>) -> Self {
         unsafe {
             Self {
-                x: CubeRng(Rng.assume_init_mut().random() as u64).random_range(x) as i8,
-                y: CubeRng(Rng.assume_init_mut().random() as u64).random_range(y) as i8,
+                x: CubeRng(RNG.assume_init_mut().random() as u64).random_range(x) as i8,
+                y: CubeRng(RNG.assume_init_mut().random() as u64).random_range(y) as i8,
             }
         }
     }
@@ -203,7 +201,7 @@ where
     /// 当前界面的索引
     ui_current_idx: i8,
     /// 表情
-    face: Face,
+    // face: Face,
     gd: Gd,
 
     mpu6050: Mpu6050<I2C<'d, T>>,
@@ -227,27 +225,27 @@ where
         if ax_abs > 0.5 || ay_abs > 0.5 {
             if ax_abs > ay_abs {
                 if ax < -0.5 {
-                    self.ledc.gd = Gd::Right;
+                    // self.ledc.gd = Gd::Right;
                     self.gd = Gd::Right;
                 }
                 if ax > 0.5 {
-                    self.ledc.gd = Gd::Left;
+                    // self.ledc.gd = Gd::Left;
                     self.gd = Gd::Left;
                 }
             }
 
             if ax_abs < ay_abs {
                 if ay < -0.5 {
-                    self.ledc.gd = Gd::Up;
+                    // self.ledc.gd = Gd::Up;
                     self.gd = Gd::Up;
                 }
                 if ay > 0.5 {
-                    self.ledc.gd = Gd::Down;
+                    // self.ledc.gd = Gd::Down;
                     self.gd = Gd::Down;
                 }
             }
         } else {
-            self.ledc.gd = Gd::None;
+            // self.ledc.gd = Gd::None;
             self.gd = Gd::None;
         }
     }
@@ -259,7 +257,7 @@ where
             buzzer: true,
             uis: Ui::uis(),
             ui_current_idx: 0,
-            face: Face::new(),
+            // face: Face::new(),
             gd: Gd::default(),
 
             mpu6050,
@@ -301,10 +299,12 @@ where
                         Ui::Snake => SnakeGame::new().run(&mut self),
                         Ui::BaGua => BaGua::run(&mut self),
                         Ui::Maze => {
-                            let cr = unsafe {
-                                CubeRng(Rng.assume_init_mut().random() as u64).random_range(19..=33)
-                                    as usize
+                            let mut cr = unsafe {
+                                CubeRng(RNG.assume_init_mut().random() as u64).random_range(19..=33)
                             };
+                            if cr % 2 == 0 {
+                                cr += 1;
+                            }
                             Maze::new(cr, cr).run(&mut self);
                         }
                         Ui::Sound => {}
