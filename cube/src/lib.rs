@@ -29,6 +29,7 @@ extern crate alloc;
 
 mod bagua;
 mod battery;
+mod cube_man;
 mod dice;
 mod face;
 pub mod ledc;

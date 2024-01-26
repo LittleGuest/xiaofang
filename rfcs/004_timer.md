@@ -1,29 +1,34 @@
-Feature Name: (fill me in with a unique identity, myawesomefeature)
+- Feature Name: 沙漏
+- Start Date: 2024-01-01
 
-Type: (feature, enhancement)
+# Summary
 
-Start Date: (fill me in with today's date, YYYY-MM-DD)
+[summary]: #summary
 
-Author: (your names)
+用Rust设计一款"沙漏"的游戏,运行在esp32c3上,显示在8*8的ws2812点阵上.
 
-Related components: (if any)
+# Motivation
 
-JIRA issues: (list of SL- numbers)
-Summary
+[motivation]: #motivation
 
-One paragraph explanation of the feature.
-Motivation
+Rust,esp32c3嵌入式学习,ws2812的使用.
 
-Why are we doing this? What use cases does it support? What is the expected outcome?
-Detailed design
+# Detailed design
 
-This is the bulk of the RFC. Explain the design in enough detail for somebody familiar with the network to understand, and for somebody familiar with the code practices to implement. This should get into specifics and corner-cases, and include examples of how the feature is used.
-Drawbacks
+- 上半部分4行表示沙子,沙子由上掉下
 
-I Why should we not do this?
-Alternatives
+[detailed-design]: #detailed-design
 
-What other designs have been considered? What is the impact of not doing this?
-Unresolved questions
+# Unresolved questions
 
-What parts of the design are still to be done?
+[unresolved-questions]: #unresolved-questions
+
+- 闪烁音效
+- 优化下落过程
+
+
+# Future possibilities
+
+[future-possibilities]: #future-possibilities
+
+无

@@ -1,29 +1,112 @@
-Feature Name: (fill me in with a unique identity, myawesomefeature)
+- Feature Name: 迷宫游戏
+- Start Date: 2024-01-06
 
-Type: (feature, enhancement)
+# Summary
 
-Start Date: (fill me in with today's date, YYYY-MM-DD)
+[summary]: #summary
 
-Author: (your names)
+用Rust设计一款"迷宫"的游戏,运行在esp32c3上,显示在8*8的ws2812点阵上.
 
-Related components: (if any)
+# Motivation
 
-JIRA issues: (list of SL- numbers)
-Summary
+[motivation]: #motivation
 
-One paragraph explanation of the feature.
-Motivation
+Rust,esp32c3嵌入式学习,ws2812的使用.
 
-Why are we doing this? What use cases does it support? What is the expected outcome?
-Detailed design
+# Detailed design
 
-This is the bulk of the RFC. Explain the design in enough detail for somebody familiar with the network to understand, and for somebody familiar with the code practices to implement. This should get into specifics and corner-cases, and include examples of how the feature is used.
-Drawbacks
+[detailed-design]: #detailed-design
 
-I Why should we not do this?
-Alternatives
+## 迷宫设计
 
-What other designs have been considered? What is the impact of not doing this?
-Unresolved questions
+左上角为坐标原点,向右为x轴方向,向下为y轴方向,所有的坐标都为全局坐标.
 
-What parts of the design are still to be done?
+
+## 玩家设计
+
+```Rust
+struct Player {
+    pos: Position,
+    old_pos: Position,
+    color: Rgb888,
+}
+```
+
+玩家的像素颜色用红色表示,
+
+如果地图大小大于8*8,led是显示不完整的,就要添加一个视野的效果,地图的内容根据视野来加载
+## 视野设计
+
+```Rust
+struct Vision {
+    /// 视野左上角坐标
+    pos: Position,
+    /// 视野数据
+    data: [[Option<Position>; 8]; 8],
+}
+```
+### 视野移动
+
+那么视野怎么移动呢,是根据玩家的位置来移动视野的,但是玩家的位置是不能超过视野范围的
+因为当玩家向前移动时,需要把地图的内容加载到视野中,就是说当玩家移动到视野范围-1或-2时,
+视野范围就需要跟着玩家一起向前运动
+当视野范围的边界的地图的边界重叠时,视野范围不动,玩家再向前移动,可以靠近边界进行移动.
+
+
+### 视野数据
+
+初始视野位置是由玩家的位置决定,位于玩家左上角,x,y相距3个像素的位置;
+
+玩家移动之后视野数据就会发生改变
+
+## 迷宫地图
+
+```Rust
+struct MazeMap {
+    /// 宽度
+    width: usize,
+    /// 长度
+    height: usize,
+    /// 地图数据
+    data: Vec<Vec<Option<Position>>>,
+    /// 地图颜色
+    color: Rgb888,
+    /// 起点
+    spos: Position,
+    /// 终点
+    epos: Position,
+    /// 终点颜色
+    color_epos: Rgb888,
+}
+```
+
+这里使用第三方库,使用算法生成迷宫地图
+
+游戏的起点位置和玩家的位置是一致的,结束位置现随机生成,后续使用算法根据初始位置计算结束位置.
+
+结束位置用绿色表示.
+
+## 坐标转换
+
+需要将地图坐标转换为led坐标
+
+
+# Drawbacks
+
+[drawbacks]: #drawbacks
+
+- 迷宫结束位置随机生成,可能起始位置间隔很近;
+
+# Unresolved questions
+
+[unresolved-questions]: #unresolved-questions
+
+- 开始动画和音乐
+- 结束动画和音乐
+
+# Future possibilities
+
+[future-possibilities]: #future-possibilities
+
+- 亲手实现迷宫生成算法
+- 使用不同的算法来生成迷宫

@@ -6,7 +6,11 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
-hal = { package = "esp32c3-hal", version = "0.13.0" }
+hal = { package = "esp32c3-hal", version = "0.13.0", features = [
+  "async",
+  "embassy",
+  "embassy-time-systick",
+] }
 esp-backtrace = { version = "0.9.0", features = [
   "esp32c3",
   "panic-handler",
@@ -38,7 +42,7 @@ static_cell = { version = "2.0.0" }
 embedded-hal = "0.2.7"
 smart-leds-matrix = { path = "../smart-leds-matrix/" }
 cube_rand = { path = "../cube_rand/" }
-irrgarten = { path = "../irrgarten/" }
+maze = { path = "../maze" }
 embedded-graphics = "0.8.1"
 embedded-graphics-core = "0.4.0"
-rand = { version = "0.8.5", default-features = false, features = ["small_rng"] }
+# rand = { version = "0.8.5", default-features = false, features = ["small_rng"] }

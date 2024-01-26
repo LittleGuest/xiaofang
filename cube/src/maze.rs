@@ -68,8 +68,6 @@ impl Maze {
         maze.map.spos = player.pos;
         maze.map.cal_epos();
 
-        // log::info!("{:?}", maze);
-
         maze
     }
 
@@ -79,16 +77,12 @@ impl Maze {
 
         loop {
             if self.game_over {
-                log::info!("maze game over");
                 // TODO 结束动画和音乐
                 app.delay.delay_ms(3000_u32);
                 break;
             }
             app.gravity_direction();
 
-            // log::info!("player pos {:?}", self.player.pos);
-            // log::info!("vision pos {:?}", self.vision.pos);
-            // log::info!("epos {:?}", self.map.epos);
             if !self.hit_wall(app) {
                 self.player.r#move(app);
                 // 玩家移动之后视野数据改变
@@ -205,7 +199,7 @@ impl MazeMap {
             data.push(tmp);
         }
 
-        let maze = irrgarten::Maze::new(width, height)
+        let maze = maze::Maze::new(width, height)
             .unwrap()
             .generate(&mut unsafe { CubeRng(RNG.assume_init_mut().random() as u64) });
         log::info!("\n{maze}\n");
@@ -229,6 +223,7 @@ impl MazeMap {
         }
     }
 
+    /// 计算结束位置
     fn cal_epos(&mut self) {
         let pos = loop {
             let x = unsafe {
@@ -247,8 +242,6 @@ impl MazeMap {
             break (x, y);
         };
         self.epos = pos.into();
-        // 将终点加入地图
-        // self.data[self.epos.y as usize][self.epos.x as usize] = Some(self.epos);
     }
 }
 
@@ -329,23 +322,4 @@ impl Player {
         self.old_pos = self.pos;
         self.pos = self.next_pos(app);
     }
-
-    // fn draw<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
-    //     self.draw_off(app);
-    //     self.draw_on(app);
-    // }
-    //
-    // fn draw_off<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
-    //     app.ledc.write_pixel(Pixel(
-    //         (self.old_pos.x as i32, self.old_pos.y as i32).into(),
-    //         BinaryColor::Off.into(),
-    //     ));
-    // }
-    //
-    // fn draw_on<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
-    //     app.ledc.write_pixel(Pixel(
-    //         (self.pos.x as i32, self.pos.y as i32).into(),
-    //         self.color,
-    //     ));
-    // }
 }
