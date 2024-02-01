@@ -15,7 +15,13 @@ Rust,esp32c3嵌入式学习,ws2812的使用.
 
 # Detailed design
 
-- 上半部分4行表示沙子,沙子由上掉下
+上半部分4行表示沙子,沙子由上掉下
+
+## 下落过程
+
+随机下落一个在最下层的像素,不能越过最下层像素(否则看起来就像中间空了一样)
+
+当像素落下时,随机选择一列最后一个像素落下,实现堆积的效果
 
 [detailed-design]: #detailed-design
 
@@ -24,7 +30,6 @@ Rust,esp32c3嵌入式学习,ws2812的使用.
 [unresolved-questions]: #unresolved-questions
 
 - 闪烁音效
-- 优化下落过程
 
 
 # Future possibilities

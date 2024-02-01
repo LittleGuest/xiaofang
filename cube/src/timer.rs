@@ -7,41 +7,6 @@ use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
 
 use crate::{App, CubeRng, Position, RNG};
 
-#[derive(Debug, Clone, Copy)]
-struct TimerPixel {
-    pixel: Pixel<Rgb888>,
-    #[allow(unused)]
-    speed: f32,
-}
-
-impl TimerPixel {
-    fn new(pos: Position, speed: f32) -> Self {
-        Self {
-            pixel: Pixel((pos.x as i32, pos.y as i32).into(), BinaryColor::On.into()),
-            speed,
-        }
-    }
-
-    /// 闪烁一下选中的像素,
-    fn blink<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
-        (0..3).for_each(|_| {
-            self.pixel.1 = BinaryColor::from(self.pixel.1).invert().into();
-            app.ledc.write_pixel(self.pixel);
-            app.delay.delay_ms(100_u32);
-            // TODO 闪烁音效
-        });
-    }
-
-    /// 执行像素的下落过程
-    fn r#move<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
-        self.pixel.1 = BinaryColor::On.into();
-        self.pixel.0.y += 4;
-        app.delay.delay_ms(500_u32);
-        app.ledc.write_pixel(self.pixel);
-        // TODO 优化下落过程
-    }
-}
-
 /// 沙漏
 #[derive(Debug, Clone)]
 pub struct Timer {
@@ -80,26 +45,81 @@ impl Timer {
         // app.delay.delay_ms(1000_u32);
     }
 
-    pub fn pixels(&mut self) -> Vec<Pixel<Rgb888>> {
+    fn pixels(&mut self) -> Vec<Pixel<Rgb888>> {
         self.pixels.iter().map(|p| p.pixel).collect::<Vec<_>>()
+    }
+
+    /// 在某一列找
+    fn last(&self, rx: i32) -> Option<usize> {
+        let Some(last) = self
+            .pixels
+            .iter()
+            .filter(|p| p.pixel.0.x == rx)
+            .max_by_key(|p| p.pixel.0.y)
+        else {
+            return None;
+        };
+        self.pixels.iter().position(|p| p == last)
     }
 
     pub fn run<T: hal::i2c::Instance>(app: &mut App<T>) {
         let mut timer = Self::default();
         timer.init(app);
 
+        let mut rxs = vec![0, 1, 2, 3, 4, 5, 6, 7];
+
         loop {
             if timer.pixels.is_empty() {
                 break;
             }
-            let index = unsafe {
-                CubeRng(RNG.assume_init_mut().random() as u64)
-                    .random(0, (timer.pixels.len()) as u32)
+
+            // 随机一列掉下
+            let rx = unsafe {
+                CubeRng(RNG.assume_init_mut().random() as u64).random(0, rxs.len() as u32)
             } as usize;
+            let Some(index) = timer.last(rxs[rx]) else {
+                rxs.remove(rx);
+                continue;
+            };
+
             app.delay.delay_ms(1000_u32);
             let mut pixel = timer.pixels.remove(index);
             pixel.blink(app);
             pixel.r#move(app);
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct TimerPixel {
+    pixel: Pixel<Rgb888>,
+    #[allow(unused)]
+    speed: f32,
+}
+
+impl TimerPixel {
+    fn new(pos: Position, speed: f32) -> Self {
+        Self {
+            pixel: Pixel((pos.x as i32, pos.y as i32).into(), BinaryColor::On.into()),
+            speed,
+        }
+    }
+
+    /// 闪烁一下选中的像素,
+    fn blink<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+        (0..3).for_each(|_| {
+            self.pixel.1 = BinaryColor::from(self.pixel.1).invert().into();
+            app.ledc.write_pixel(self.pixel);
+            app.delay.delay_ms(100_u32);
+            // TODO 闪烁音效
+        });
+    }
+
+    /// 执行像素的下落过程
+    fn r#move<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+        self.pixel.1 = BinaryColor::On.into();
+        self.pixel.0.y += 4;
+        app.delay.delay_ms(500_u32);
+        app.ledc.write_pixel(self.pixel);
     }
 }

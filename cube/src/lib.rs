@@ -25,6 +25,7 @@ use snake::SnakeGame;
 use timer::Timer;
 use ui::Ui;
 
+#[macro_use]
 extern crate alloc;
 
 mod bagua;
