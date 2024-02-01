@@ -79,7 +79,7 @@ fn main() -> ! {
         SpiMode::Mode0,
         &clocks,
     );
-    let ledc = LedControl::new(delay, spi);
+    let ledc = LedControl::new(delay, spi, ledc);
 
     let rng = hal::Rng::new(peripherals.RNG);
     unsafe { cube::RNG.write(rng) };

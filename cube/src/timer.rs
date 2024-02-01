@@ -28,7 +28,7 @@ impl core::default::Default for Timer {
 impl Timer {
     fn init<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         app.ledc.clear();
-        app.ledc.clear_work();
+        // app.ledc.clear_work();
         app.gravity_direction();
         app.ledc.write_pixels(self.pixels());
 

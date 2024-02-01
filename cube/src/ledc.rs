@@ -1,8 +1,15 @@
 use embedded_graphics::{pixelcolor::*, prelude::*};
+use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
 use hal::{
-    peripherals::SPI2,
+    ledc::{
+        channel::{self, Channel},
+        timer::TimerSpeed,
+        LEDC,
+    },
+    peripherals::{Peripherals, SPI2},
+    prelude::_esp_hal_ledc_channel_ChannelIFace,
     spi::{master::Spi, FullDuplexMode},
-    Delay,
+    Delay, IO,
 };
 use heapless::Vec;
 use smart_leds_matrix::{
@@ -18,7 +25,7 @@ const NUM_LEDS: usize = 64;
 
 pub struct LedControl<'d> {
     /// 初级显存
-    pub buf_work: [u8; 8],
+    // pub buf_work: [u8; 8],
     /// 最终上传的数据
     buf: [u8; 8],
     gd: Gd,
@@ -27,11 +34,12 @@ pub struct LedControl<'d> {
     _brightness: u8,
     ws: Ws2812<Spi<'d, SPI2, FullDuplexMode>>,
     matrix: SmartLedMatrix<Rectangular<NoInvert>, NUM_LEDS>,
-    _delay: Delay,
+    ledc: LEDC<'d>,
+    delay: Delay,
 }
 
 impl<'d> LedControl<'d> {
-    pub fn new(delay: Delay, spi: Spi<'d, SPI2, FullDuplexMode>) -> Self {
+    pub fn new(delay: Delay, spi: Spi<'d, SPI2, FullDuplexMode>, ledc: LEDC<'d>) -> Self {
         let brightness = 10;
 
         let ws = Ws2812::new(spi);
@@ -40,13 +48,14 @@ impl<'d> LedControl<'d> {
         matrix.clear(Rgb888::new(0, 0, 0)).unwrap();
 
         Self {
-            buf_work: [0; 8],
+            // buf_work: [0; 8],
             buf: [0; 8],
             gd: Gd::default(),
             _brightness: brightness,
             ws,
             matrix,
-            _delay: delay,
+            ledc,
+            delay,
         }
     }
 
@@ -59,11 +68,11 @@ impl<'d> LedControl<'d> {
         self.matrix.set_brightness(b)
     }
 
-    pub fn clear_work(&mut self) {
-        for i in 0..self.buf_work.len() {
-            self.buf_work[i] = 0;
-        }
-    }
+    // pub fn clear_work(&mut self) {
+    //     for i in 0..self.buf_work.len() {
+    //         self.buf_work[i] = 0;
+    //     }
+    // }
 
     pub fn clear(&mut self) {
         for i in 0..self.buf.len() {
@@ -116,50 +125,69 @@ impl<'d> LedControl<'d> {
         self.write_pixels([pixel]);
     }
 
-    /// 设置指定坐标单个led的亮灭
-    pub fn set_led_work(&mut self, x: u8, y: u8, on: bool) {
-        if x > 7 || y > 7 {
-            return;
-        }
-        let y = y as usize;
-        if on {
-            self.buf_work[y] |= 1 << (7 - x);
-        } else {
-            self.buf_work[y] &= !(1 << (7 - x));
-        }
+    pub fn tone(&mut self) {
+        let peripherals = Peripherals::take();
+        let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
+
+        let mut channel0 = self.ledc.get_channel(
+            channel::Number::Channel0,
+            io.pins.gpio8.into_push_pull_output(),
+        );
+
+        channel0.set_duty(0).unwrap();
+        self.delay.delay_ms(2000_u32);
+        channel0.set_duty(0).unwrap();
+        self.delay.delay_ms(2000_u32);
+        channel0.start_duty_fade(0, 100, 1000).unwrap();
+        while channel0.is_duty_fade_running() {}
+        channel0.start_duty_fade(100, 0, 1000).unwrap();
+        while channel0.is_duty_fade_running() {}
     }
 
     /// 设置指定坐标单个led的亮灭
-    pub fn set_led(&mut self, x: u8, y: u8, on: bool) {
-        if x > 7 || y > 7 {
-            return;
-        }
-        let y = y as usize;
-        if on {
-            self.buf[y] |= 1 << (7 - x);
-        } else {
-            self.buf[y] &= !(1 << (7 - x));
-        }
-    }
+    // pub fn set_led_work(&mut self, x: u8, y: u8, on: bool) {
+    //     if x > 7 || y > 7 {
+    //         return;
+    //     }
+    //     let y = y as usize;
+    //     if on {
+    //         self.buf_work[y] |= 1 << (7 - x);
+    //     } else {
+    //         self.buf_work[y] &= !(1 << (7 - x));
+    //     }
+    // }
+
+    /// 设置指定坐标单个led的亮灭
+    // pub fn set_led(&mut self, x: u8, y: u8, on: bool) {
+    //     if x > 7 || y > 7 {
+    //         return;
+    //     }
+    //     let y = y as usize;
+    //     if on {
+    //         self.buf[y] |= 1 << (7 - x);
+    //     } else {
+    //         self.buf[y] &= !(1 << (7 - x));
+    //     }
+    // }
 
     /// 判断在外部缓存里指定坐标像素的状态
     /// 获取外部显存数组指定坐标的状态,这个用于像素互动判断
-    pub fn get_led_state_work(&self, x: u8, y: u8, view: [u8; 8]) -> bool {
-        log::info!("led view {view:?}");
-        if x <= 7 && y <= 7 {
-            let state = view[y as usize] & (1 << (7 - x));
-            log::info!("led stat {state}");
-            state > 0
-        } else {
-            false
-        }
-    }
+    // pub fn get_led_state_work(&self, x: u8, y: u8, view: [u8; 8]) -> bool {
+    //     log::info!("led view {view:?}");
+    //     if x <= 7 && y <= 7 {
+    //         let state = view[y as usize] & (1 << (7 - x));
+    //         log::info!("led stat {state}");
+    //         state > 0
+    //     } else {
+    //         false
+    //     }
+    // }
 
     /// 把指定画面转存到初级显存里
     /// 负责把游戏运行显存的内容拷贝到初级显存
-    pub fn bitmap_work(&mut self, buf: [u8; 8]) {
-        (0..8).for_each(|i| self.buf_work[i] = buf[i]);
-    }
+    // pub fn bitmap_work(&mut self, buf: [u8; 8]) {
+    //     (0..8).for_each(|i| self.buf_work[i] = buf[i]);
+    // }
 
     /// 图形显示，把图形数组传递给显存数组
     /// 按指定方向变化画面防线写入后级显存，根据屏幕姿态控制显示方向，可以实现画面跟随重力自动旋转,fangxiang为上下左右对应的1342

@@ -98,7 +98,7 @@ impl SnakeGame {
     pub fn draw<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         let ledc = &mut app.ledc;
         ledc.clear();
-        ledc.clear_work();
+        // ledc.clear_work();
         let mut tmp = self.snake.as_bytes();
         for (i, s) in tmp.iter_mut().enumerate() {
             if i == self.food.y as usize {
@@ -116,12 +116,15 @@ impl SnakeGame {
         let dn = num_map(dn);
         let mut sn = num_map(sn);
 
-        app.ledc.bitmap_work(dn);
-        (0..8).for_each(|i| sn[i] >>= 4);
-        (0..8).for_each(|i| app.ledc.buf_work[i] |= sn[i]);
-        (0..8).for_each(|i| app.ledc.buf_work[i] >>= 1);
+        // app.ledc.bitmap_work(dn);
+        let mut buf_work = [0; 8];
+        (0..8).for_each(|i| buf_work[i] = dn[i]);
 
-        app.ledc.write_bytes(app.ledc.buf_work);
+        (0..8).for_each(|i| sn[i] >>= 4);
+        (0..8).for_each(|i| buf_work[i] |= sn[i]);
+        (0..8).for_each(|i| buf_work[i] >>= 1);
+
+        app.ledc.write_bytes(buf_work);
     }
 }
 
