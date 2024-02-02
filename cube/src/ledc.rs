@@ -1,15 +1,8 @@
 use embedded_graphics::{pixelcolor::*, prelude::*};
-use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
 use hal::{
-    ledc::{
-        channel::{self, Channel},
-        timer::TimerSpeed,
-        LEDC,
-    },
-    peripherals::{Peripherals, SPI2},
-    prelude::_esp_hal_ledc_channel_ChannelIFace,
+    peripherals::SPI2,
     spi::{master::Spi, FullDuplexMode},
-    Delay, IO,
+    Delay,
 };
 use heapless::Vec;
 use smart_leds_matrix::{
@@ -34,12 +27,11 @@ pub struct LedControl<'d> {
     _brightness: u8,
     ws: Ws2812<Spi<'d, SPI2, FullDuplexMode>>,
     matrix: SmartLedMatrix<Rectangular<NoInvert>, NUM_LEDS>,
-    ledc: LEDC<'d>,
     delay: Delay,
 }
 
 impl<'d> LedControl<'d> {
-    pub fn new(delay: Delay, spi: Spi<'d, SPI2, FullDuplexMode>, ledc: LEDC<'d>) -> Self {
+    pub fn new(delay: Delay, spi: Spi<'d, SPI2, FullDuplexMode>) -> Self {
         let brightness = 10;
 
         let ws = Ws2812::new(spi);
@@ -48,13 +40,11 @@ impl<'d> LedControl<'d> {
         matrix.clear(Rgb888::new(0, 0, 0)).unwrap();
 
         Self {
-            // buf_work: [0; 8],
             buf: [0; 8],
             gd: Gd::default(),
             _brightness: brightness,
             ws,
             matrix,
-            ledc,
             delay,
         }
     }
@@ -123,25 +113,6 @@ impl<'d> LedControl<'d> {
 
     pub fn write_pixel(&mut self, pixel: Pixel<Rgb888>) {
         self.write_pixels([pixel]);
-    }
-
-    pub fn tone(&mut self) {
-        let peripherals = Peripherals::take();
-        let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
-
-        let mut channel0 = self.ledc.get_channel(
-            channel::Number::Channel0,
-            io.pins.gpio8.into_push_pull_output(),
-        );
-
-        channel0.set_duty(0).unwrap();
-        self.delay.delay_ms(2000_u32);
-        channel0.set_duty(0).unwrap();
-        self.delay.delay_ms(2000_u32);
-        channel0.start_duty_fade(0, 100, 1000).unwrap();
-        while channel0.is_duty_fade_running() {}
-        channel0.start_duty_fade(100, 0, 1000).unwrap();
-        while channel0.is_duty_fade_running() {}
     }
 
     /// 设置指定坐标单个led的亮灭

@@ -112,6 +112,7 @@ impl TimerPixel {
             app.ledc.write_pixel(self.pixel);
             app.delay.delay_ms(100_u32);
             // TODO 闪烁音效
+            app.buzzer.timer_pixel_blinky();
         });
     }
 

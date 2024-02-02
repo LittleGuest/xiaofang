@@ -6,6 +6,7 @@ use core::{mem::MaybeUninit, ops::RangeBounds};
 
 use alloc::vec::Vec;
 use bagua::BaGua;
+use buzzer::Buzzer;
 use cube_rand::CubeRng;
 use dice::Dice;
 use embedded_graphics_core::{
@@ -13,7 +14,7 @@ use embedded_graphics_core::{
     Pixel,
 };
 use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
-use hal::{i2c::I2C, Delay};
+use hal::{i2c::I2C, ledc::LEDC, peripherals::Peripherals, Delay, IO};
 use ledc::LedControl;
 use maze::Maze;
 use mpu6050_dmp::{
@@ -30,6 +31,7 @@ extern crate alloc;
 
 mod bagua;
 mod battery;
+pub mod buzzer;
 mod cube_man;
 mod dice;
 mod face;
@@ -39,6 +41,12 @@ mod maze;
 mod snake;
 mod timer;
 mod ui;
+
+lazy_static::lazy_static! {
+    // static ref App:App<'d>={};
+    // static ref LC: LEDC<'d>={};
+    // pub static ref Io:IO=IO::new(gpio, io_mux);
+}
 
 #[global_allocator]
 static ALLOCATOR: esp_alloc::EspHeap = esp_alloc::EspHeap::empty();
@@ -196,8 +204,6 @@ pub struct App<'d, T>
 where
     T: hal::i2c::Instance,
 {
-    /// 蜂鸣器开关
-    buzzer: bool,
     /// 界面
     uis: Vec<Ui>,
     /// 当前界面的索引
@@ -208,6 +214,8 @@ where
 
     mpu6050: Mpu6050<I2C<'d, T>>,
     ledc: LedControl<'d>,
+    buzzer: Buzzer<'d>,
+
     delay: Delay,
 }
 
@@ -252,11 +260,15 @@ where
         }
     }
 
-    pub fn new(delay: Delay, mpu6050: Mpu6050<I2C<'d, T>>, mut ledc: LedControl<'d>) -> Self {
+    pub fn new(
+        delay: Delay,
+        mpu6050: Mpu6050<I2C<'d, T>>,
+        mut ledc: LedControl<'d>,
+        buzzer: Buzzer<'d>,
+    ) -> Self {
         ledc.set_brightness(0x01);
 
         App {
-            buzzer: true,
             uis: Ui::uis(),
             ui_current_idx: 0,
             // face: Face::new(),
@@ -264,6 +276,7 @@ where
 
             mpu6050,
             ledc,
+            buzzer,
             delay,
         }
     }

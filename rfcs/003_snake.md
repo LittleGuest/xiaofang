@@ -5,13 +5,13 @@
 
 [summary]: #summary
 
-用Rust设计一款"贪吃蛇"的游戏,运行在esp32c3上,显示在8*8的ws2812点阵上.
+用 Rust 设计一款"贪吃蛇"的游戏,运行在 esp32c3 上,显示在 8\*8 的 ws2812 点阵上.
 
 # Motivation
 
 [motivation]: #motivation
 
-Rust,esp32c3嵌入式学习,ws2812的使用.
+Rust,esp32c3 嵌入式学习,ws2812 的使用.
 
 # Detailed design
 
@@ -29,8 +29,7 @@ struct Snake {
 }
 ```
 
-蛇本身有移动方向direction,头部head的坐标和身体body的坐标(其中包含头部,在LinkedList的首部),
-
+蛇本身有移动方向 direction,头部 head 的坐标和身体 body 的坐标(其中包含头部,在 LinkedList 的首部),
 
 # Unresolved questions
 
@@ -39,7 +38,6 @@ struct Snake {
 - 吃掉食物的动画和音效
 - 历史最高分动画,音乐
 - 移动音效,得分音效和画面效果,死亡音效
-
 
 # Future possibilities
 

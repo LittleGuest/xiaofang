@@ -45,4 +45,7 @@ cube_rand = { path = "../cube_rand/" }
 maze = { path = "../maze" }
 embedded-graphics = "0.8.1"
 embedded-graphics-core = "0.4.0"
+lazy_static = { version = "1.4.0", default-features = false, features = [
+  "spin_no_std",
+] }
 # rand = { version = "0.8.5", default-features = false, features = ["small_rng"] }

@@ -116,7 +116,6 @@ impl SnakeGame {
         let dn = num_map(dn);
         let mut sn = num_map(sn);
 
-        // app.ledc.bitmap_work(dn);
         let mut buf_work = [0; 8];
         (0..8).for_each(|i| buf_work[i] = dn[i]);
 

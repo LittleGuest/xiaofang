@@ -5,13 +5,13 @@
 
 [summary]: #summary
 
-用Rust设计一款"骰子"的游戏,运行在esp32c3上,显示在8*8的ws2812点阵上.
+用 Rust 设计一款"骰子"的游戏,运行在 esp32c3 上,显示在 8\*8 的 ws2812 点阵上.
 
 # Motivation
 
 [motivation]: #motivation
 
-Rust,esp32c3嵌入式学习,ws2812的使用.
+Rust,esp32c3 嵌入式学习,ws2812 的使用.
 
 # Detailed design
 
@@ -19,7 +19,7 @@ Rust,esp32c3嵌入式学习,ws2812的使用.
 
 ## 数字设计
 
-晃动屏幕,将随机生成6个数字中的一个;
+晃动屏幕,将随机生成 6 个数字中的一个;
 
 ### 1
 

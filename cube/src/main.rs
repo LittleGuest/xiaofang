@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 
+use cube::buzzer::Buzzer;
 use cube::ledc::LedControl;
 use esp_backtrace as _;
 use hal::ledc::{channel, timer, LSGlobalClkSource, LowSpeed, LEDC};
@@ -45,6 +46,8 @@ fn main() -> ! {
     // 改变 PWM 信号:输出 PWM 信号来驱动
     channel0.set_duty(0).unwrap();
 
+    let buzzer = Buzzer::new(ledc, delay);
+
     // loop {
     // channel0.set_duty(0).unwrap();
     // delay.delay_ms(2000_u32);
@@ -79,11 +82,11 @@ fn main() -> ! {
         SpiMode::Mode0,
         &clocks,
     );
-    let ledc = LedControl::new(delay, spi, ledc);
+    let ledc = LedControl::new(delay, spi);
 
     let rng = hal::Rng::new(peripherals.RNG);
     unsafe { cube::RNG.write(rng) };
 
     cube::init();
-    cube::App::new(delay, mpu, ledc).run()
+    cube::App::new(delay, mpu, ledc, buzzer).run()
 }
