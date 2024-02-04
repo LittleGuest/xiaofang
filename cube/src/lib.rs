@@ -7,6 +7,7 @@ use core::{mem::MaybeUninit, ops::RangeBounds};
 use alloc::vec::Vec;
 use bagua::BaGua;
 use buzzer::Buzzer;
+use cube_man::CubeManGame;
 use cube_rand::CubeRng;
 use dice::Dice;
 use embedded_graphics_core::{
@@ -62,6 +63,8 @@ pub fn init() {
     }
 }
 
+struct PositionVec(Vec<Position>);
+
 /// 左上角为坐标原点,横x,纵y
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 struct Position {
@@ -74,6 +77,12 @@ impl From<(usize, usize)> for Position {
             x: value.0 as i8,
             y: value.1 as i8,
         }
+    }
+}
+
+impl FromIterator<(usize, usize)> for PositionVec {
+    fn from_iter<T: IntoIterator<Item = (usize, usize)>>(iter: T) -> Self {
+        todo!()
     }
 }
 
@@ -309,8 +318,8 @@ where
                     // 向上进入对应的界面
                     let ui = &self.uis[self.ui_current_idx as usize];
                     match ui {
-                        Ui::Timer => Timer::run(&mut self),
-                        Ui::Dice => Dice::run(&mut self),
+                        Ui::Timer => Timer::default().run(&mut self),
+                        Ui::Dice => Dice.run(&mut self),
                         Ui::Snake => SnakeGame::new().run(&mut self),
                         Ui::BaGua => BaGua::run(&mut self),
                         Ui::Maze => {
@@ -322,6 +331,7 @@ where
                             }
                             Maze::new(cr, cr).run(&mut self);
                         }
+                        Ui::CubeMan => CubeManGame::new().run(&mut self),
                         Ui::Sound => {}
                     }
                 }

@@ -62,14 +62,13 @@ impl Timer {
         self.pixels.iter().position(|p| p == last)
     }
 
-    pub fn run<T: hal::i2c::Instance>(app: &mut App<T>) {
-        let mut timer = Self::default();
-        timer.init(app);
+    pub fn run<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+        self.init(app);
 
         let mut rxs = vec![0, 1, 2, 3, 4, 5, 6, 7];
 
         loop {
-            if timer.pixels.is_empty() {
+            if self.pixels.is_empty() {
                 break;
             }
 
@@ -77,13 +76,13 @@ impl Timer {
             let rx = unsafe {
                 CubeRng(RNG.assume_init_mut().random() as u64).random(0, rxs.len() as u32)
             } as usize;
-            let Some(index) = timer.last(rxs[rx]) else {
+            let Some(index) = self.last(rxs[rx]) else {
                 rxs.remove(rx);
                 continue;
             };
 
             app.delay.delay_ms(1000_u32);
-            let mut pixel = timer.pixels.remove(index);
+            let mut pixel = self.pixels.remove(index);
             pixel.blink(app);
             pixel.r#move(app);
         }

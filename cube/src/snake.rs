@@ -1,7 +1,7 @@
 use alloc::collections::LinkedList;
 use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
 
-use crate::{mapping::num_map, App, Direction, Gd, Position};
+use crate::{mapping, App, Direction, Gd, Position};
 
 type Food = Position;
 
@@ -113,8 +113,8 @@ impl SnakeGame {
 
         let dn = self.score / 10;
         let sn = self.score % 10;
-        let dn = num_map(dn);
-        let mut sn = num_map(sn);
+        let dn = mapping::num_map(dn);
+        let mut sn = mapping::num_map(sn);
 
         let mut buf_work = [0; 8];
         (0..8).for_each(|i| buf_work[i] = dn[i]);

@@ -98,7 +98,7 @@ impl Maze {
         }
     }
 
-    pub fn draw<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    fn draw<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         app.ledc.clear_with_color(BinaryColor::Off.into());
         let mut pixels = Vec::<Pixel<Rgb888>>::new();
         // 将地图坐标转换为led坐标
@@ -133,7 +133,7 @@ impl Maze {
     }
 
     /// 检测是否撞墙
-    pub fn hit_wall<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) -> bool {
+    fn hit_wall<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) -> bool {
         let Position { x, y } = self.player.next_pos(app);
         let overlapping =
             x <= 0 || y <= 0 || x >= self.map.width as i8 - 1 || y >= self.map.height as i8 - 1;

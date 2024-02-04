@@ -74,12 +74,12 @@ impl Dice {
         }
     }
 
-    pub fn random() -> [u8; 8] {
+    fn random() -> [u8; 8] {
         let num = unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random(1, 7_u32) } as u8;
         Self::dice(num)
     }
 
-    pub fn run<T: hal::i2c::Instance>(app: &mut App<T>) {
+    pub fn run<T: hal::i2c::Instance>(&self, app: &mut App<T>) {
         app.ledc.clear();
         loop {
             let accel = app.accel();
