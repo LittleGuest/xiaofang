@@ -12,8 +12,8 @@ use crate::{App, CubeRng, Gd, Position, RNG};
 /// 左上角为坐标原点,所有的坐标都为全局坐标
 /// 如果地图大小大于8*8,led是显示不完整的,就要添加一个视野的效果,地图的内容根据视野来加载
 #[derive(Debug)]
-pub struct Maze {
-    map: MazeMap,
+pub struct Sokoban {
+    map: Map,
     player: Player,
     vision: Vision,
     /// ms
@@ -21,9 +21,9 @@ pub struct Maze {
     game_over: bool,
 }
 
-impl Maze {
+impl Sokoban {
     pub fn new(width: usize, height: usize) -> Self {
-        let map = MazeMap::new(width, height);
+        let map = Map::new(width, height);
         // 随机玩家坐标
         let pp = loop {
             let pp = Position::random_range_usize(1..width, 1..height);
@@ -56,7 +56,7 @@ impl Maze {
             }
         };
 
-        let mut maze = Maze {
+        let mut maze = Sokoban {
             map,
             player,
             vision: Vision::new(Position::new(vpx, vpy)),
@@ -171,7 +171,7 @@ impl Maze {
 
 /// 迷宫地图
 #[derive(Debug)]
-struct MazeMap {
+struct Map {
     /// 宽度
     width: usize,
     /// 长度
@@ -188,7 +188,7 @@ struct MazeMap {
     color_epos: Rgb888,
 }
 
-impl MazeMap {
+impl Map {
     fn new(width: usize, height: usize) -> Self {
         // 使用地图生成算法生成地图 TODO 迷宫大小,使用的算法都随机
         let mut data = Vec::<Vec<Option<Position>>>::with_capacity(height);

@@ -11,7 +11,7 @@ use smart_leds_matrix::{
 };
 use ws2812_spi::Ws2812;
 
-use crate::Gd;
+use crate::{mapping, Gd};
 
 /// led 数量
 const NUM_LEDS: usize = 64;
@@ -230,5 +230,23 @@ impl<'d> LedControl<'d> {
                 (0..8).for_each(|i| self.buf[i] <<= 1);
             }
         }
+    }
+
+    pub fn draw_score(&mut self, score: u8) {
+        self.clear();
+
+        let dn = score / 10;
+        let sn = score % 10;
+        let dn = mapping::num_map(dn);
+        let mut sn = mapping::num_map(sn);
+
+        let mut buf_work = [0; 8];
+        (0..8).for_each(|i| buf_work[i] = dn[i]);
+
+        (0..8).for_each(|i| sn[i] >>= 4);
+        (0..8).for_each(|i| buf_work[i] |= sn[i]);
+        (0..8).for_each(|i| buf_work[i] >>= 1);
+
+        self.write_bytes(buf_work);
     }
 }

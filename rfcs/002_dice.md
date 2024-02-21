@@ -5,7 +5,7 @@
 
 [summary]: #summary
 
-用 Rust 设计一款"骰子"的游戏,运行在 esp32c3 上,显示在 8\*8 的 ws2812 点阵上.
+用 Rust 设计一款"骰子"的游戏,运行在 esp32c3 上,显示在 8*8 的 ws2812 点阵上.
 
 # Motivation
 

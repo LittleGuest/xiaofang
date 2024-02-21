@@ -16,6 +16,8 @@ pub enum Ui {
     Maze,
     /// 方块人
     CubeMan,
+    /// 推箱子
+    Sokoban,
     /// 声音
     Sound,
 }
@@ -29,6 +31,7 @@ impl Ui {
             Ui::BaGua,
             Ui::Maze,
             Ui::CubeMan,
+            Ui::Sokoban,
             Ui::Sound,
         ]
         .into()
@@ -96,6 +99,16 @@ impl Ui {
                 0b11110000,
                 0b00000000,
                 0b00111110,
+            ],
+            Ui::Sokoban => [
+                0b01100110,
+                0b10111101,
+                0b10000001,
+                0b10111101,
+                0b10000001,
+                0b11011011,
+                0b01000010,
+                0b01111110,
             ],
             // Ui::Temp => [
             //     0b00000000,

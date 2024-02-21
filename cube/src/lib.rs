@@ -15,7 +15,7 @@ use embedded_graphics_core::{
     Pixel,
 };
 use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
-use hal::{i2c::I2C, ledc::LEDC, peripherals::Peripherals, Delay, IO};
+use hal::{i2c::I2C, Delay};
 use ledc::LedControl;
 use maze::Maze;
 use mpu6050_dmp::{
@@ -40,6 +40,7 @@ pub mod ledc;
 mod mapping;
 mod maze;
 mod snake;
+mod sokoban;
 mod timer;
 mod ui;
 
@@ -144,6 +145,12 @@ impl Position {
 
 impl From<Position> for Pixel<Rgb888> {
     fn from(p: Position) -> Self {
+        Self((p.x as i32, p.y as i32).into(), BinaryColor::On.into())
+    }
+}
+
+impl From<&Position> for Pixel<Rgb888> {
+    fn from(p: &Position) -> Self {
         Self((p.x as i32, p.y as i32).into(), BinaryColor::On.into())
     }
 }
@@ -332,6 +339,7 @@ where
                             Maze::new(cr, cr).run(&mut self);
                         }
                         Ui::CubeMan => CubeManGame::new().run(&mut self),
+                        Ui::Sokoban => {}
                         Ui::Sound => {}
                     }
                 }

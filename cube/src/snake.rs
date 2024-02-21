@@ -1,7 +1,7 @@
 use alloc::collections::LinkedList;
 use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
 
-use crate::{mapping, App, Direction, Gd, Position};
+use crate::{App, Direction, Gd, Position};
 
 type Food = Position;
 
@@ -39,7 +39,7 @@ impl SnakeGame {
         loop {
             if self.game_over {
                 // TODO 历史最高分动画,音乐
-                self.draw_score(app);
+                app.ledc.draw_score(self.score);
                 app.delay.delay_ms(3000_u32);
                 break;
             }
@@ -106,24 +106,6 @@ impl SnakeGame {
             }
         }
         ledc.write_bytes(tmp);
-    }
-
-    fn draw_score<T: hal::i2c::Instance>(&self, app: &mut App<T>) {
-        app.ledc.clear();
-
-        let dn = self.score / 10;
-        let sn = self.score % 10;
-        let dn = mapping::num_map(dn);
-        let mut sn = mapping::num_map(sn);
-
-        let mut buf_work = [0; 8];
-        (0..8).for_each(|i| buf_work[i] = dn[i]);
-
-        (0..8).for_each(|i| sn[i] >>= 4);
-        (0..8).for_each(|i| buf_work[i] |= sn[i]);
-        (0..8).for_each(|i| buf_work[i] >>= 1);
-
-        app.ledc.write_bytes(buf_work);
     }
 }
 
