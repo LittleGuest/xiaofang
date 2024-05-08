@@ -1,5 +1,5 @@
 use alloc::collections::LinkedList;
-use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
+use embedded_hal::delay::DelayNs;
 
 use crate::{App, Direction, Gd, Position};
 
@@ -32,7 +32,7 @@ impl SnakeGame {
         }
     }
 
-    pub fn run<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    pub fn run<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         app.ledc.clear();
         app.gd = Gd::default();
 
@@ -95,7 +95,7 @@ impl SnakeGame {
         };
     }
 
-    pub fn draw<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    pub fn draw<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         let ledc = &mut app.ledc;
         ledc.clear();
         // ledc.clear_work();

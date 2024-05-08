@@ -1,8 +1,8 @@
 use embedded_graphics::{pixelcolor::*, prelude::*};
-use hal::{
+use esp_hal::{
+    delay::Delay,
     peripherals::SPI2,
     spi::{master::Spi, FullDuplexMode},
-    Delay,
 };
 use heapless::Vec;
 use smart_leds_matrix::{

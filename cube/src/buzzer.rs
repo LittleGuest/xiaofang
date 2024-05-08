@@ -1,8 +1,6 @@
 use cube_rand::CubeRng;
-use embedded_hal::prelude::{
-    _embedded_hal_blocking_delay_DelayMs, _embedded_hal_blocking_delay_DelayUs,
-};
-use hal::{ledc::LEDC, Delay};
+use embedded_hal::delay::DelayNs;
+use esp_hal::{delay::Delay, ledc::LEDC};
 
 use crate::RNG;
 

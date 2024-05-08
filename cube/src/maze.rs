@@ -4,7 +4,7 @@ use embedded_graphics_core::{
     prelude::{RgbColor, WebColors},
     Pixel,
 };
-use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
+use embedded_hal::delay::DelayNs;
 
 use crate::{App, CubeRng, Gd, Position, RNG};
 
@@ -71,7 +71,7 @@ impl Maze {
         maze
     }
 
-    pub fn run<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    pub fn run<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         app.ledc.clear();
         app.gd = Gd::default();
 
@@ -99,7 +99,7 @@ impl Maze {
         }
     }
 
-    fn draw<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    fn draw<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         app.ledc.clear_with_color(BinaryColor::Off.into());
         let mut pixels = Vec::<Pixel<Rgb888>>::new();
         // 将地图坐标转换为led坐标
@@ -134,7 +134,7 @@ impl Maze {
     }
 
     /// 检测是否撞墙
-    fn hit_wall<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) -> bool {
+    fn hit_wall<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) -> bool {
         let Position { x, y } = self.player.next_pos(app);
         let overlapping =
             x <= 0 || y <= 0 || x >= self.map.width as i8 - 1 || y >= self.map.height as i8 - 1;
@@ -156,7 +156,7 @@ impl Maze {
     }
 
     /// 改变视野位置
-    fn update_vision<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    fn update_vision<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         let Position { x, y } = self.vision.next_pos(app);
         let overlapping =
             x < 0 || y < 0 || x >= self.map.width as i8 - 7 || y >= self.map.height as i8 - 7;
@@ -273,7 +273,7 @@ impl Vision {
         }
     }
 
-    fn next_pos<T: hal::i2c::Instance>(&self, app: &mut App<T>) -> Position {
+    fn next_pos<T: esp_hal::i2c::Instance>(&self, app: &mut App<T>) -> Position {
         let mut pos = self.pos;
         match app.gd {
             Gd::None => {}
@@ -285,7 +285,7 @@ impl Vision {
         pos
     }
 
-    fn r#move<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    fn r#move<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         self.pos = self.next_pos(app);
     }
 }
@@ -307,7 +307,7 @@ impl Player {
         }
     }
 
-    fn next_pos<T: hal::i2c::Instance>(&self, app: &mut App<T>) -> Position {
+    fn next_pos<T: esp_hal::i2c::Instance>(&self, app: &mut App<T>) -> Position {
         let mut pos = self.pos;
         match app.gd {
             Gd::None => {}
@@ -319,7 +319,7 @@ impl Player {
         pos
     }
 
-    fn r#move<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    fn r#move<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         self.old_pos = self.pos;
         self.pos = self.next_pos(app);
     }

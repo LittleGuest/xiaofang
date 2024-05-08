@@ -4,10 +4,12 @@
 use cube::buzzer::Buzzer;
 use cube::ledc::LedControl;
 use esp_backtrace as _;
-use hal::ledc::{channel, timer, LSGlobalClkSource, LowSpeed, LEDC};
-use hal::spi::master::Spi;
-use hal::spi::SpiMode;
-use hal::{clock::ClockControl, i2c::I2C, peripherals::Peripherals, prelude::*, Delay, IO};
+use esp_hal::delay::Delay;
+use esp_hal::gpio::IO;
+use esp_hal::ledc::{channel, timer, LSGlobalClkSource, LowSpeed, LEDC};
+use esp_hal::spi::master::Spi;
+use esp_hal::spi::SpiMode;
+use esp_hal::{clock::ClockControl, i2c::I2C, peripherals::Peripherals, prelude::*};
 use mpu6050_dmp::address::Address;
 use mpu6050_dmp::sensor::Mpu6050;
 
@@ -65,6 +67,7 @@ fn main() -> ! {
         io.pins.gpio5,
         1_000u32.kHz(),
         &clocks,
+        None,
     );
     let mut mpu = Mpu6050::new(i2c, Address::default()).unwrap();
     mpu.initialize_dmp(&mut delay).unwrap();
@@ -75,16 +78,12 @@ fn main() -> ! {
     // );
     // let (accel_offset, gyro_offset) = calibrate(&mut mpu, &mut delay, &parameters).unwrap();
 
-    let spi = Spi::new_mosi_only(
-        peripherals.SPI2,
-        io.pins.gpio3,
-        3_u32.MHz(),
-        SpiMode::Mode0,
-        &clocks,
-    );
+    let spi =
+        Spi::new(peripherals.SPI2, 3_u32.MHz(), SpiMode::Mode0, &clocks).with_mosi(io.pins.gpio3);
+
     let ledc = LedControl::new(delay, spi);
 
-    let rng = hal::Rng::new(peripherals.RNG);
+    let rng = esp_hal::rng::Rng::new(peripherals.RNG);
     unsafe { cube::RNG.write(rng) };
 
     cube::init();

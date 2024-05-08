@@ -8,7 +8,7 @@ use embedded_graphics_core::{
     prelude::WebColors,
     Pixel,
 };
-use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
+use embedded_hal::delay::DelayNs;
 use esp_println::dbg;
 
 use crate::{App, Gd, Position, RNG};
@@ -40,7 +40,7 @@ impl CubeManGame {
         }
     }
 
-    pub fn run<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    pub fn run<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         app.ledc.clear();
         app.gd = Gd::default();
 
@@ -88,7 +88,7 @@ impl CubeManGame {
         }
     }
 
-    fn r#move<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    fn r#move<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         let np = self.man.next_pos(app);
         if self.outside(&np) {
             self.game_over = true;
@@ -140,7 +140,7 @@ impl CubeManGame {
     }
 
     /// 在地板上的移动
-    fn moving_on_floor<T: hal::i2c::Instance>(&mut self, floor: &Floor, app: &mut App<T>) {
+    fn moving_on_floor<T: esp_hal::i2c::Instance>(&mut self, floor: &Floor, app: &mut App<T>) {
         match &floor.r#type {
             FloorType::Normal => {}
             FloorType::Fragile(t) => {
@@ -183,7 +183,7 @@ impl CubeManGame {
         }
     }
 
-    pub fn draw<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    pub fn draw<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         log::info!("level {:?}", self.depth);
         log::info!("falled floor {:?}", self.floors);
         app.ledc.clear_with_color(BinaryColor::Off.into());
@@ -396,7 +396,7 @@ impl CubeMan {
         }
     }
 
-    fn next_pos<T: hal::i2c::Instance>(&self, app: &mut App<T>) -> Position {
+    fn next_pos<T: esp_hal::i2c::Instance>(&self, app: &mut App<T>) -> Position {
         let mut pos = self.pos;
         match app.gd {
             Gd::Right => pos.x += 1,
@@ -406,7 +406,7 @@ impl CubeMan {
         pos
     }
 
-    fn r#move<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    fn r#move<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         self.pos = self.next_pos(app);
     }
 

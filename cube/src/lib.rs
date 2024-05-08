@@ -14,8 +14,8 @@ use embedded_graphics_core::{
     pixelcolor::{BinaryColor, Rgb888},
     Pixel,
 };
-use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
-use hal::{i2c::I2C, Delay};
+use embedded_hal::delay::DelayNs;
+use esp_hal::{delay::Delay, i2c::I2C, rng::Rng, Blocking};
 use ledc::LedControl;
 use maze::Maze;
 use mpu6050_dmp::{
@@ -44,16 +44,16 @@ mod sokoban;
 mod timer;
 mod ui;
 
-lazy_static::lazy_static! {
-    // static ref App:App<'d>={};
-    // static ref LC: LEDC<'d>={};
-    // pub static ref Io:IO=IO::new(gpio, io_mux);
-}
+// lazy_static::lazy_static! {
+// static ref App:App<'d>={};
+// static ref LC: LEDC<'d>={};
+// pub static ref Io:IO=IO::new(gpio, io_mux);
+// }
 
 #[global_allocator]
 static ALLOCATOR: esp_alloc::EspHeap = esp_alloc::EspHeap::empty();
 
-pub static mut RNG: MaybeUninit<hal::Rng> = MaybeUninit::uninit();
+pub static mut RNG: MaybeUninit<Rng> = MaybeUninit::uninit();
 
 pub fn init() {
     const HEAP_SIZE: usize = 64 * 1024;
@@ -218,7 +218,7 @@ impl From<Direction> for Gd {
 /// 小方
 pub struct App<'d, T>
 where
-    T: hal::i2c::Instance,
+    T: esp_hal::i2c::Instance,
 {
     /// 界面
     uis: Vec<Ui>,
@@ -228,7 +228,7 @@ where
     // face: Face,
     gd: Gd,
 
-    mpu6050: Mpu6050<I2C<'d, T>>,
+    mpu6050: Mpu6050<I2C<'d, T, Blocking>>,
     ledc: LedControl<'d>,
     buzzer: Buzzer<'d>,
 
@@ -237,7 +237,7 @@ where
 
 impl<'d, T> App<'d, T>
 where
-    T: hal::i2c::Instance,
+    T: esp_hal::i2c::Instance,
 {
     fn gravity_direction(&mut self) {
         let accel = self.accel();
@@ -278,7 +278,7 @@ where
 
     pub fn new(
         delay: Delay,
-        mpu6050: Mpu6050<I2C<'d, T>>,
+        mpu6050: Mpu6050<I2C<'d, T, Blocking>>,
         mut ledc: LedControl<'d>,
         buzzer: Buzzer<'d>,
     ) -> Self {

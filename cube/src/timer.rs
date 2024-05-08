@@ -3,7 +3,7 @@ use embedded_graphics_core::{
     pixelcolor::{BinaryColor, Rgb888},
     Pixel,
 };
-use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
+use embedded_hal::delay::DelayNs;
 
 use crate::{App, CubeRng, Position, RNG};
 
@@ -26,7 +26,7 @@ impl core::default::Default for Timer {
 }
 
 impl Timer {
-    fn init<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    fn init<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         app.ledc.clear();
         // app.ledc.clear_work();
         app.gravity_direction();
@@ -62,7 +62,7 @@ impl Timer {
         self.pixels.iter().position(|p| p == last)
     }
 
-    pub fn run<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    pub fn run<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         self.init(app);
 
         let mut rxs = vec![0, 1, 2, 3, 4, 5, 6, 7];
@@ -105,7 +105,7 @@ impl TimerPixel {
     }
 
     /// 闪烁一下选中的像素,
-    fn blink<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    fn blink<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         (0..3).for_each(|_| {
             self.pixel.1 = BinaryColor::from(self.pixel.1).invert().into();
             app.ledc.write_pixel(self.pixel);
@@ -116,7 +116,7 @@ impl TimerPixel {
     }
 
     /// 执行像素的下落过程
-    fn r#move<T: hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    fn r#move<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         self.pixel.1 = BinaryColor::On.into();
         self.pixel.0.y += 4;
         app.delay.delay_ms(500_u32);

@@ -3,31 +3,20 @@ name = "smart-leds-matrix"
 version = "0.1.0"
 edition = "2021"
 authors = ["Gergo Huszty <gergo.huszty@digitaltrip.hu>"]
-categories = [
-    "embedded",
-    "hardware-support",
-    "no-std",
-]
+categories = ["embedded", "hardware-support", "no-std"]
 description = "DrawTarget implementation for smart led based matrixes. It allows the usage of the embedded-graphics Drawables."
 documentation = "https://docs.rs/crate/smart-leds-matrix"
-keywords = [
-    "arm",
-    "cortex-m",
-    "embedded",
-    "graphics"
-]
+keywords = ["arm", "cortex-m", "embedded", "graphics"]
 license = "Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/smart-leds-rs/smart-leds-matrix"
-exclude = [
-    "pacman.gif",
-]
+exclude = ["pacman.gif"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-display-interface = "0.4.1"
+display-interface = "0.5.0"
 embedded-graphics-core = "0.4.0"
-embedded-hal = "0.2.7"
-smart-leds = "0.3.0"
-smart-leds-trait = "0.2.1"
+embedded-hal = "1.0.0"
+smart-leds = "0.4.0"
+smart-leds-trait = "0.3.0"

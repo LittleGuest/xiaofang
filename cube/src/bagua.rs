@@ -1,4 +1,4 @@
-use embedded_hal::prelude::_embedded_hal_blocking_delay_DelayMs;
+use embedded_hal::delay::DelayNs;
 
 use crate::{App, CubeRng, RNG};
 
@@ -117,7 +117,7 @@ impl BaGua {
         Self::bagua(num)
     }
 
-    pub fn run<T: hal::i2c::Instance>(app: &mut App<T>) {
+    pub fn run<T: esp_hal::i2c::Instance>(app: &mut App<T>) {
         app.ledc.clear();
         loop {
             let accel = app.accel();
