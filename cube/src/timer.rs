@@ -51,14 +51,11 @@ impl Timer {
 
     /// 在某一列找
     fn last(&self, rx: i32) -> Option<usize> {
-        let Some(last) = self
+        let last = self
             .pixels
             .iter()
             .filter(|p| p.pixel.0.x == rx)
-            .max_by_key(|p| p.pixel.0.y)
-        else {
-            return None;
-        };
+            .max_by_key(|p| p.pixel.0.y)?;
         self.pixels.iter().position(|p| p == last)
     }
 

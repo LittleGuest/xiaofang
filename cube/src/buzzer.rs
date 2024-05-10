@@ -28,7 +28,7 @@ impl<'d> Buzzer<'d> {
             return;
         }
 
-        // unimplemented!()
+        unimplemented!()
         // let mut channel0 = self.ledc.get_channel(
         //     channel::Number::Channel0,
         //     io.pins.gpio8.into_push_pull_output(),

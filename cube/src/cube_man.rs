@@ -56,9 +56,8 @@ impl CubeManGame {
             {
                 self.floors.pop_front();
 
-                let span = unsafe {
-                    CubeRng(RNG.assume_init_mut().random() as u64).random_range(2..=3) as usize
-                };
+                let span =
+                    unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random_range(2..=3) };
 
                 let mut floor = self.floor_gen.floor(self.depth);
                 if let Some(ref mut floor) = floor {
@@ -101,8 +100,7 @@ impl CubeManGame {
                 &self
                     .floors
                     .iter()
-                    .filter(|f| f.is_some())
-                    .map(|f| f.clone().unwrap())
+                    .filter_map(|f| f.clone())
                     .collect::<Vec<_>>(),
                 &np,
             ) {
@@ -275,7 +273,7 @@ impl Floor {
     fn new(ft: FloorType, data: &[Position]) -> Self {
         Self {
             r#type: ft,
-            data: data.into_iter().map(|p| p.into()).collect::<Vec<_>>(),
+            data: data.iter().map(|p| p.into()).collect::<Vec<_>>(),
         }
     }
 }
@@ -303,15 +301,13 @@ impl FloorGen {
     /// 随机生成地板
     fn random(level: usize) -> Option<Floor> {
         // 概率生成地板
-        let per =
-            unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random_range(1..=10) as usize };
+        let per = unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random_range(1..=10) };
         if per < 7 {
             return None;
         }
 
         // 地板长度
-        let len =
-            unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random_range(3..=5) as usize };
+        let len = unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random_range(3..=5) };
         let mut data = Vec::<Position>::with_capacity(len);
         for i in 0..len {
             data.push((i, 0).into());
@@ -348,8 +344,7 @@ impl FloorGen {
         }
         floors.push_back(floor);
 
-        let span =
-            unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random_range(2..=6) as usize };
+        let span = unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random_range(2..=6) };
         for _ in 0..span {
             floors.push_back(None);
         }

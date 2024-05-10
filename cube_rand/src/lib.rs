@@ -39,13 +39,13 @@ impl CubeRng {
         };
 
         let low = match range.start_bound() {
-            Bound::Unbounded => core::u32::MIN,
+            Bound::Unbounded => u32::MIN,
             Bound::Included(&x) => x as u32,
             Bound::Excluded(&x) => (x as u32).checked_add(1).unwrap_or_else(panic_empty_range),
         };
 
         let high = match range.end_bound() {
-            Bound::Unbounded => core::u32::MAX,
+            Bound::Unbounded => u32::MAX,
             Bound::Included(&x) => x as u32,
             Bound::Excluded(&x) => (x as u32).checked_sub(1).unwrap_or_else(panic_empty_range),
         };
