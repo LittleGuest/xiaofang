@@ -3,12 +3,12 @@
 
 use alloc::{collections::VecDeque, vec::Vec};
 use cube_rand::CubeRng;
+use embassy_time::Timer;
 use embedded_graphics_core::{
     pixelcolor::{BinaryColor, Rgb888},
     prelude::WebColors,
     Pixel,
 };
-use embedded_hal::delay::DelayNs;
 use esp_println::dbg;
 
 use crate::{App, Gd, Position, RNG};
@@ -22,7 +22,7 @@ pub struct CubeManGame {
     score: u8,
     game_over: bool,
     /// ms
-    waiting_time: u32,
+    waiting_time: u64,
 }
 
 impl CubeManGame {
@@ -40,7 +40,7 @@ impl CubeManGame {
         }
     }
 
-    pub fn run<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    pub async fn run<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<'_, T>) {
         app.ledc.clear();
         app.gd = Gd::default();
 
@@ -48,7 +48,7 @@ impl CubeManGame {
             if self.game_over {
                 // TODO 历史最高分动画,音乐
                 app.ledc.draw_score(self.score);
-                app.delay.delay_ms(3000_u32);
+                Timer::after_millis(3000).await;
                 break;
             }
             app.gravity_direction();
@@ -82,12 +82,12 @@ impl CubeManGame {
             // TODO 移动音效,得分音效和画面效果,死亡音效
             self.draw(app);
 
-            app.delay.delay_ms(self.waiting_time);
+            Timer::after_millis(self.waiting_time).await;
             self.depth += 1;
         }
     }
 
-    fn r#move<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    async fn r#move<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<'_, T>) {
         let np = self.man.next_pos(app);
         if self.outside(&np) {
             self.game_over = true;
@@ -110,7 +110,7 @@ impl CubeManGame {
                 self.man.fall();
             }
             // 左右移动时间
-            app.delay.delay_ms(70_u32);
+            Timer::after_millis(70).await;
         }
     }
 
@@ -138,25 +138,29 @@ impl CubeManGame {
     }
 
     /// 在地板上的移动
-    fn moving_on_floor<T: esp_hal::i2c::Instance>(&mut self, floor: &Floor, app: &mut App<T>) {
+    async fn moving_on_floor<T: esp_hal::i2c::Instance>(
+        &mut self,
+        floor: &Floor,
+        app: &mut App<'_, T>,
+    ) {
         match &floor.r#type {
             FloorType::Normal => {}
             FloorType::Fragile(t) => {
                 let mut fds = floor.data.clone();
-                (0..3).for_each(|_| {
+                for _ in 0..3 {
                     for fd in fds.iter_mut() {
                         fd.1 = BinaryColor::from(fd.1).invert().into();
                     }
                     app.ledc.write_pixels(fds.clone());
-                    app.delay.delay_ms(50_u32);
-                });
+                    Timer::after_millis(50).await;
+                }
 
                 for fd in fds.iter_mut() {
                     fd.1 = BinaryColor::Off.into();
                 }
                 app.ledc.write_pixels(fds);
 
-                app.delay.delay_ms(*t);
+                Timer::after_millis(*t).await;
             }
             FloorType::Conveyor(cd) => {
                 if app.gd == Gd::Left || app.gd == Gd::Right {
@@ -248,7 +252,7 @@ enum FloorType {
     /// 正常
     Normal,
     /// 易碎(碎裂时间)
-    Fragile(u32),
+    Fragile(u64),
     /// 传送带(传送带旋转方向)
     Conveyor(ConveyorDir),
     /// 弹簧(反弹的高度)

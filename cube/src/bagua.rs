@@ -1,4 +1,4 @@
-use embedded_hal::delay::DelayNs;
+use embassy_time::Timer;
 
 use crate::{App, CubeRng, RNG};
 
@@ -117,7 +117,7 @@ impl BaGua {
         Self::bagua(num)
     }
 
-    pub fn run<T: esp_hal::i2c::Instance>(app: &mut App<T>) {
+    pub async fn run<T: esp_hal::i2c::Instance>(app: &mut App<'_, T>) {
         app.ledc.clear();
         loop {
             let accel = app.accel();
@@ -132,7 +132,7 @@ impl BaGua {
                 app.ledc.bitmap(Self::random());
                 app.ledc.upload();
             }
-            app.delay.delay_ms(800_u32);
+            Timer::after_millis(800).await;
 
             // TODO 退出占卦模式
         }

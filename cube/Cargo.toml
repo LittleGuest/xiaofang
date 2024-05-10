@@ -16,6 +16,9 @@ esp-hal = { version = "0.17.0", features = [
   "esp32c3",
   "async",
   "embassy",
+  "embassy-executor-thread",
+  "embassy-executor-interrupt",
+  "embassy-integrated-timers",
   "embassy-time-timg0",
 ] }
 esp-println = { version = "0.9.1", features = ["esp32c3", "log"] }
@@ -28,6 +31,8 @@ esp-wifi = { version = "0.5.1", features = [
   "phy-enable-usb",
   "utils",
   "wifi",
+  "async",
+  "embassy-net",
 ] }
 heapless = { version = "0.8.0", default-features = false }
 smoltcp = { version = "0.11.0", default-features = false, features = [
@@ -41,6 +46,16 @@ smoltcp = { version = "0.11.0", default-features = false, features = [
   "socket-tcp",
   "socket-udp",
 ] }
+embassy-executor = { version = "0.5.0", features = [
+  # "task-arena-size-40960",
+  # "nightly",
+  # "arch-riscv32",
+  # "integrated-timers",
+  # "executor-thread",
+] }
+embassy-time = "0.3.0"
+embassy-sync = "0.5.0"
+embassy-net = { version = "0.4.0", features = ["dhcpv4", "tcp", "udp", "dns"] }
 mpu6050-dmp = "0.4.0"
 static_cell = { version = "2.1.0" }
 embedded-hal = "1.0.0"

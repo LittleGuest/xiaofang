@@ -1,6 +1,6 @@
 use cube_rand::CubeRng;
-use embedded_hal::delay::DelayNs;
-use esp_hal::{delay::Delay, ledc::LEDC};
+use embassy_time::Timer;
+use esp_hal::ledc::LEDC;
 
 use crate::RNG;
 
@@ -8,16 +8,11 @@ use crate::RNG;
 pub struct Buzzer<'d> {
     open: bool,
     pwm: LEDC<'d>,
-    delay: Delay,
 }
 
 impl<'d> Buzzer<'d> {
-    pub fn new(pwm: LEDC<'d>, delay: Delay) -> Self {
-        Self {
-            open: true,
-            pwm,
-            delay,
-        }
+    pub fn new(pwm: LEDC<'d>) -> Self {
+        Self { open: true, pwm }
     }
 
     /// 发声
@@ -43,9 +38,9 @@ impl<'d> Buzzer<'d> {
         // 改变 PWM 信号:输出 PWM 信号来驱动
         // channel0.set_duty(0).unwrap();
         // channel0.set_duty(0).unwrap();
-        // self.delay.delay_ms(2000_u32);
+        // Timer::after_millis(200).await;
         // channel0.set_duty(0).unwrap();
-        // self.delay.delay_ms(2000_u32);
+        // Timer::after_millis(200).await;
         // channel0.start_duty_fade(0, 100, 1000).unwrap();
         // while channel0.is_duty_fade_running() {}
         // channel0.start_duty_fade(100, 0, 1000).unwrap();
@@ -62,123 +57,121 @@ impl<'d> Buzzer<'d> {
     }
 
     /// 菜单选择音效
-    pub fn menu_select(&mut self) {
+    pub async fn menu_select(&mut self) {
         if self.open {
             self.tone(1500, 100);
-            self.delay.delay_ms(200_u32);
-        } else {
-            self.delay.delay_ms(200_u32);
         }
+        Timer::after_millis(200).await;
     }
 
     /// 菜单选择音效2
-    pub fn menu_select_2(&mut self) {
+    pub async fn menu_select_2(&mut self) {
         if !self.open {
             return;
         }
         self.tone(100, 50);
         self.no_tone();
-        self.delay.delay_ms(50_u32);
+        Timer::after_millis(50).await;
     }
 
     /// 菜单确认音效
-    pub fn menu_confirm(&mut self) {
+    pub async fn menu_confirm(&mut self) {
         if !self.open {
             return;
         }
         for i in (400..2000).step_by(100) {
             self.tone(i, 50);
-            self.delay.delay_ms(10_u32);
+            Timer::after_millis(10).await;
         }
     }
 
     /// 菜单进入音效
-    pub fn menu_access(&mut self) {
+    pub async fn menu_access(&mut self) {
         if !self.open {
             return;
         }
         for i in (200..=3000).rev().step_by(200) {
             self.tone(i, 50);
-            self.delay.delay_ms(10_u32);
+            Timer::after_millis(10).await;
         }
     }
 
     /// 八卦音效
-    pub fn bagua(&mut self) {
+    pub async fn bagua(&mut self) {
         if !self.open {
             return;
         }
         for i in (200..=3000).rev().step_by(400) {
             self.tone(i, 50);
-            self.delay.delay_ms(10_u32);
+            Timer::after_millis(10).await;
         }
     }
 
     /// 迷宫移动音效
-    pub fn maze_move(&mut self) {
+    pub async fn maze_move(&mut self) {
         if self.open {
             self.tone(5000, 50);
-            self.delay.delay_ms(50_u32);
+            Timer::after_millis(50).await;
             self.no_tone();
         } else {
-            self.delay.delay_ms(50_u32);
+            Timer::after_millis(50).await;
         }
     }
 
     /// 休眠开启音效
-    pub fn hibernation(&mut self) {
+    pub async fn hibernation(&mut self) {
         self.tone(8000, 100);
-        self.delay.delay_ms(100_u32);
+        Timer::after_millis(100).await;
         self.tone(2500, 100);
-        self.delay.delay_ms(100_u32);
+        Timer::after_millis(100).await;
         self.tone(800, 100);
-        self.delay.delay_ms(100_u32);
+        Timer::after_millis(100).await;
         self.no_tone();
     }
 
     /// 开机音效
-    pub fn power_on(&mut self) {
+    pub async fn power_on(&mut self) {
         self.tone(800, 200);
-        self.delay.delay_ms(200_u32);
+        Timer::after_millis(200).await;
         self.tone(2500, 100);
-        self.delay.delay_ms(100_u32);
+        Timer::after_millis(100).await;
         self.tone(8000, 200);
-        self.delay.delay_ms(200_u32);
+        Timer::after_millis(200).await;
         self.no_tone();
     }
 
     /// 唤醒音效
-    pub fn wakeup(&mut self) {
+    pub async fn wakeup(&mut self) {
         self.tone(1500, 200);
-        self.delay.delay_ms(200_u32);
+        Timer::after_millis(200).await;
         self.tone(8000, 200);
-        self.delay.delay_ms(200_u32);
+        Timer::after_millis(200).await;
         self.no_tone();
     }
 
     /// 沙漏像素闪烁音效
-    pub fn timer_pixel_blinky(&mut self) {
+    pub async fn timer_pixel_blinky(&mut self) {
         if !self.open {
             return;
         }
         self.tone(8000, 50);
-        self.delay.delay_ms(50_u32);
+        Timer::after_millis(50).await;
         self.no_tone();
     }
 
     /// 沙漏像素反弹音效
-    pub fn timer_pixel_rebound(&mut self) {
+    pub async fn timer_pixel_rebound(&mut self) {
         if self.open {
             self.tone(4000, 50);
-            self.delay.delay_ms(50_u32);
+            Timer::after_millis(50).await;
             self.no_tone();
         } else {
-            self.delay.delay_ms(50_u32);
+            Timer::after_millis(50).await;
         }
     }
 
     /// 沙漏结束音效
-    pub fn timer_over(&mut self) {
+    pub async fn timer_over(&mut self) {
         if !self.open {
             return;
         }
@@ -186,58 +179,58 @@ impl<'d> Buzzer<'d> {
             self.tone(6000, 100);
             // lc.bitmap(all_led_on);
             // lc.UpLoad();
-            self.delay.delay_ms(1_u32);
+            Timer::after_millis(1).await;
             // lc.clearDisplay();
-            self.delay.delay_ms(100_u32);
+            Timer::after_millis(100).await;
             self.no_tone();
-            self.delay.delay_ms(20_u32);
+            Timer::after_millis(20).await;
         }
 
         // lc.setIntensity(2);
         // lc.bitmap(all_led_on);
         // lc.UpLoad();
         self.tone(6000, 150);
-        self.delay.delay_ms(50_u32);
+        Timer::after_millis(50).await;
         // lc.clearDisplay();
-        self.delay.delay_ms(100_u32);
+        Timer::after_millis(100).await;
         self.no_tone();
         // lc.setIntensity(8);
     }
 
     /// 贪吃蛇得分音效
-    pub fn snake_score(&mut self) {
+    pub async fn snake_score(&mut self) {
         if !self.open {
             return;
         }
         // lc.setIntensity(3);
-        self.delay.delay_ms(100_u32);
+        Timer::after_millis(100).await;
         self.tone(2000, 1000);
-        self.delay.delay_ms(15_u32);
+        Timer::after_millis(15).await;
         self.no_tone();
         // lc.setIntensity(0);
-        self.delay.delay_ms(50_u32);
+        Timer::after_millis(50).await;
         self.tone(3000, 1000);
-        self.delay.delay_ms(15_u32);
+        Timer::after_millis(15).await;
         self.no_tone();
         // lc.setIntensity(3);
-        self.delay.delay_ms(25_u32);
+        Timer::after_millis(25).await;
         self.tone(2000, 1000);
-        self.delay.delay_ms(15_u32);
+        Timer::after_millis(15).await;
         self.no_tone();
         // lc.setIntensity(0);
     }
 
     /// 贪吃蛇死亡音效
-    pub fn snake_die(&mut self) {
+    pub async fn snake_die(&mut self) {
         if !self.open {
             return;
         }
         self.tone(500, 1000);
-        self.delay.delay_ms(160_u32);
+        Timer::after_millis(160).await;
         self.tone(300, 1000);
-        self.delay.delay_ms(160_u32);
+        Timer::after_millis(160).await;
         self.tone(100, 1000);
-        self.delay.delay_ms(200_u32);
+        Timer::after_millis(200).await;
         self.no_tone();
     }
 

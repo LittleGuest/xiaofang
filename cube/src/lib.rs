@@ -10,12 +10,12 @@ use buzzer::Buzzer;
 use cube_man::CubeManGame;
 use cube_rand::CubeRng;
 use dice::Dice;
+use embassy_time::Timer;
 use embedded_graphics_core::{
     pixelcolor::{BinaryColor, Rgb888},
     Pixel,
 };
-use embedded_hal::delay::DelayNs;
-use esp_hal::{delay::Delay, i2c::I2C, rng::Rng, Blocking};
+use esp_hal::{i2c::I2C, rng::Rng, Blocking};
 use ledc::LedControl;
 use maze::Maze;
 use mpu6050_dmp::{
@@ -24,7 +24,7 @@ use mpu6050_dmp::{
 };
 use snake::SnakeGame;
 
-use timer::Timer;
+use timers::Timers;
 use ui::Ui;
 
 #[macro_use]
@@ -41,7 +41,7 @@ mod mapping;
 mod maze;
 mod snake;
 mod sokoban;
-mod timer;
+mod timers;
 mod ui;
 
 // lazy_static::lazy_static! {
@@ -50,19 +50,7 @@ mod ui;
 // pub static ref Io:IO=IO::new(gpio, io_mux);
 // }
 
-#[global_allocator]
-static ALLOCATOR: esp_alloc::EspHeap = esp_alloc::EspHeap::empty();
-
 pub static mut RNG: MaybeUninit<Rng> = MaybeUninit::uninit();
-
-pub fn init() {
-    const HEAP_SIZE: usize = 64 * 1024;
-    static mut HEAP: MaybeUninit<[u8; HEAP_SIZE]> = MaybeUninit::uninit();
-
-    unsafe {
-        ALLOCATOR.init(HEAP.as_mut_ptr() as *mut u8, HEAP_SIZE);
-    }
-}
 
 struct PositionVec(Vec<Position>);
 
@@ -231,8 +219,6 @@ where
     mpu6050: Mpu6050<I2C<'d, T, Blocking>>,
     ledc: LedControl<'d>,
     buzzer: Buzzer<'d>,
-
-    delay: Delay,
 }
 
 impl<'d, T> App<'d, T>
@@ -277,7 +263,6 @@ where
     }
 
     pub fn new(
-        delay: Delay,
         mpu6050: Mpu6050<I2C<'d, T, Blocking>>,
         mut ledc: LedControl<'d>,
         buzzer: Buzzer<'d>,
@@ -293,7 +278,6 @@ where
             mpu6050,
             ledc,
             buzzer,
-            delay,
         }
     }
 
@@ -301,9 +285,9 @@ where
         self.mpu6050.accel().unwrap().scaled(AccelFullScale::G2)
     }
 
-    pub fn run(mut self) -> ! {
+    pub async fn run(mut self) -> ! {
         loop {
-            self.delay.delay_ms(600_u32);
+            Timer::after_millis(600).await;
 
             self.gravity_direction();
 
@@ -325,10 +309,10 @@ where
                     // 向上进入对应的界面
                     let ui = &self.uis[self.ui_current_idx as usize];
                     match ui {
-                        Ui::Timer => Timer::default().run(&mut self),
-                        Ui::Dice => Dice.run(&mut self),
-                        Ui::Snake => SnakeGame::new().run(&mut self),
-                        Ui::BaGua => BaGua::run(&mut self),
+                        Ui::Timer => Timers::default().run(&mut self).await,
+                        Ui::Dice => Dice.run(&mut self).await,
+                        Ui::Snake => SnakeGame::new().run(&mut self).await,
+                        Ui::BaGua => BaGua::run(&mut self).await,
                         Ui::Maze => {
                             let mut cr = unsafe {
                                 CubeRng(RNG.assume_init_mut().random() as u64).random_range(19..=33)
@@ -338,7 +322,7 @@ where
                             }
                             Maze::new(cr, cr).run(&mut self);
                         }
-                        Ui::CubeMan => CubeManGame::new().run(&mut self),
+                        Ui::CubeMan => CubeManGame::new().run(&mut self).await,
                         Ui::Sokoban => {}
                         Ui::Sound => {}
                     }

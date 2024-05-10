@@ -1,26 +1,59 @@
 #![no_std]
 #![no_main]
 
+use core::mem::MaybeUninit;
 use cube::buzzer::Buzzer;
 use cube::ledc::LedControl;
+use embassy_executor::Spawner;
 use esp_backtrace as _;
 use esp_hal::delay::Delay;
 use esp_hal::gpio::IO;
 use esp_hal::ledc::{channel, timer, LSGlobalClkSource, LowSpeed, LEDC};
+use esp_hal::rng::Rng;
 use esp_hal::spi::master::Spi;
 use esp_hal::spi::SpiMode;
+use esp_hal::timer::TimerGroup;
+use esp_hal::Blocking;
 use esp_hal::{clock::ClockControl, i2c::I2C, peripherals::Peripherals, prelude::*};
 use mpu6050_dmp::address::Address;
 use mpu6050_dmp::sensor::Mpu6050;
 
-#[entry]
-fn main() -> ! {
+extern crate alloc;
+
+#[global_allocator]
+static ALLOCATOR: esp_alloc::EspHeap = esp_alloc::EspHeap::empty();
+
+fn init_heap() {
+    const HEAP_SIZE: usize = 32 * 1024;
+    static mut HEAP: MaybeUninit<[u8; HEAP_SIZE]> = MaybeUninit::uninit();
+
+    unsafe {
+        ALLOCATOR.init(HEAP.as_mut_ptr() as *mut u8, HEAP_SIZE);
+    }
+}
+
+#[main]
+async fn main(spawner: Spawner) {
     let peripherals = Peripherals::take();
     let system = peripherals.SYSTEM.split();
     let clocks = ClockControl::max(system.clock_control).freeze();
     let mut delay = Delay::new(&clocks);
+    init_heap();
     esp_println::logger::init_logger_from_env();
+    let timer = esp_hal::systimer::SystemTimer::new(peripherals.SYSTIMER).alarm0;
+    let tg0 = TimerGroup::new_async(peripherals.TIMG0, &clocks);
     let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
+
+    esp_hal::embassy::init(&clocks, tg0);
+
+    // let _init = esp_wifi::initialize(
+    //     esp_wifi::EspWifiInitFor::Wifi,
+    //     timer,
+    //     esp_hal::rng::Rng::new(peripherals.RNG),
+    //     system.radio_clock_control,
+    //     &clocks,
+    // )
+    // .unwrap();
 
     let mut ledc = LEDC::new(peripherals.LEDC, &clocks);
     ledc.set_global_slow_clock(LSGlobalClkSource::APBClk);
@@ -48,7 +81,7 @@ fn main() -> ! {
     // 改变 PWM 信号:输出 PWM 信号来驱动
     channel0.set_duty(0).unwrap();
 
-    let buzzer = Buzzer::new(ledc, delay);
+    let buzzer = Buzzer::new(ledc);
 
     // loop {
     // channel0.set_duty(0).unwrap();
@@ -81,11 +114,10 @@ fn main() -> ! {
     let spi =
         Spi::new(peripherals.SPI2, 3_u32.MHz(), SpiMode::Mode0, &clocks).with_mosi(io.pins.gpio3);
 
-    let ledc = LedControl::new(delay, spi);
+    let ledc = LedControl::new(spi);
 
     let rng = esp_hal::rng::Rng::new(peripherals.RNG);
     unsafe { cube::RNG.write(rng) };
 
-    cube::init();
-    cube::App::new(delay, mpu, ledc, buzzer).run()
+    cube::App::new(mpu, ledc, buzzer).run().await
 }

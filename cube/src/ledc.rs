@@ -1,6 +1,5 @@
 use embedded_graphics::{pixelcolor::*, prelude::*};
 use esp_hal::{
-    delay::Delay,
     peripherals::SPI2,
     spi::{master::Spi, FullDuplexMode},
 };
@@ -27,11 +26,10 @@ pub struct LedControl<'d> {
     _brightness: u8,
     ws: Ws2812<Spi<'d, SPI2, FullDuplexMode>>,
     matrix: SmartLedMatrix<Rectangular<NoInvert>, NUM_LEDS>,
-    delay: Delay,
 }
 
 impl<'d> LedControl<'d> {
-    pub fn new(delay: Delay, spi: Spi<'d, SPI2, FullDuplexMode>) -> Self {
+    pub fn new(spi: Spi<'d, SPI2, FullDuplexMode>) -> Self {
         let brightness = 10;
 
         let ws = Ws2812::new(spi);
@@ -45,7 +43,6 @@ impl<'d> LedControl<'d> {
             _brightness: brightness,
             ws,
             matrix,
-            delay,
         }
     }
 
@@ -103,8 +100,6 @@ impl<'d> LedControl<'d> {
     where
         I: IntoIterator<Item = Pixel<Rgb888>>,
     {
-        // self.clear_with_color(Rgb888::default());
-        // self.delay.delay_ms(50_u32);
         self.matrix.draw_iter(pixels).unwrap();
         if let Err(e) = self.matrix.flush_with_gamma(&mut self.ws) {
             log::error!("write_rgb {e:?}");

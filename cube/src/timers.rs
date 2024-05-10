@@ -1,19 +1,19 @@
 use alloc::vec::Vec;
+use embassy_time::Timer;
 use embedded_graphics_core::{
     pixelcolor::{BinaryColor, Rgb888},
     Pixel,
 };
-use embedded_hal::delay::DelayNs;
 
 use crate::{App, CubeRng, Position, RNG};
 
 /// 沙漏
 #[derive(Debug, Clone)]
-pub struct Timer {
+pub struct Timers {
     pixels: Vec<TimerPixel>,
 }
 
-impl core::default::Default for Timer {
+impl core::default::Default for Timers {
     fn default() -> Self {
         let mut pixels = Vec::<TimerPixel>::with_capacity(32);
         for y in 0..4 {
@@ -25,24 +25,24 @@ impl core::default::Default for Timer {
     }
 }
 
-impl Timer {
+impl Timers {
     fn init<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         app.ledc.clear();
         // app.ledc.clear_work();
         app.gravity_direction();
         app.ledc.write_pixels(self.pixels());
 
-        // app.delay.delay_ms(1000_u32);
+        // Timer::after_millis(1000).await;
         // // 闪烁三次配音效后开始
         // (0..3).for_each(|_| {
         //     // TODO 音效
         //     app.ledc.set_brightness(0x01);
-        //     app.delay.delay_ms(50_u32);
+        // Timer::after_millis(50).await;
         //     app.ledc.set_brightness(0x00);
-        //     app.delay.delay_ms(50_u32);
+        // Timer::after_millis(50).await;
         // });
         //
-        // app.delay.delay_ms(1000_u32);
+        // Timer::after_millis(1000).await;
     }
 
     fn pixels(&mut self) -> Vec<Pixel<Rgb888>> {
@@ -59,7 +59,7 @@ impl Timer {
         self.pixels.iter().position(|p| p == last)
     }
 
-    pub fn run<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    pub async fn run<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<'_, T>) {
         self.init(app);
 
         let mut rxs = vec![0, 1, 2, 3, 4, 5, 6, 7];
@@ -78,10 +78,10 @@ impl Timer {
                 continue;
             };
 
-            app.delay.delay_ms(1000_u32);
+            Timer::after_millis(1000).await;
             let mut pixel = self.pixels.remove(index);
-            pixel.blink(app);
-            pixel.r#move(app);
+            pixel.blink(app).await;
+            pixel.r#move(app).await;
         }
     }
 }
@@ -102,21 +102,21 @@ impl TimerPixel {
     }
 
     /// 闪烁一下选中的像素,
-    fn blink<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
-        (0..3).for_each(|_| {
+    async fn blink<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<'_, T>) {
+        for _ in 0..3 {
             self.pixel.1 = BinaryColor::from(self.pixel.1).invert().into();
             app.ledc.write_pixel(self.pixel);
-            app.delay.delay_ms(100_u32);
+            Timer::after_millis(100).await;
             // TODO 闪烁音效
             app.buzzer.timer_pixel_blinky();
-        });
+        }
     }
 
     /// 执行像素的下落过程
-    fn r#move<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    async fn r#move<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<'_, T>) {
         self.pixel.1 = BinaryColor::On.into();
         self.pixel.0.y += 4;
-        app.delay.delay_ms(500_u32);
+        Timer::after_millis(500).await;
         app.ledc.write_pixel(self.pixel);
     }
 }

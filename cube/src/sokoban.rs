@@ -1,10 +1,10 @@
 use alloc::vec::Vec;
+use embassy_time::Timer;
 use embedded_graphics_core::{
     pixelcolor::{BinaryColor, Rgb888},
     prelude::{RgbColor, WebColors},
     Pixel,
 };
-use embedded_hal::delay::DelayNs;
 
 use crate::{App, CubeRng, Gd, Position, RNG};
 
@@ -17,7 +17,7 @@ pub struct Sokoban {
     player: Player,
     vision: Vision,
     /// ms
-    waiting_time: u32,
+    waiting_time: u64,
     game_over: bool,
 }
 
@@ -71,14 +71,14 @@ impl Sokoban {
         maze
     }
 
-    pub fn run<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    pub async fn run<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<'_, T>) {
         app.ledc.clear();
         app.gd = Gd::default();
 
         loop {
             if self.game_over {
                 // TODO 结束动画和音乐
-                app.delay.delay_ms(3000_u32);
+                Timer::after_millis(3000).await;
                 break;
             }
             app.gravity_direction();
@@ -95,7 +95,7 @@ impl Sokoban {
             }
             self.draw(app);
 
-            app.delay.delay_ms(self.waiting_time);
+            Timer::after_millis(self.waiting_time).await;
         }
     }
 
