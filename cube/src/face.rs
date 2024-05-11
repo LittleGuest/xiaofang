@@ -1,870 +1,330 @@
 #![allow(unused)]
+use alloc::vec::Vec;
+use cube_rand::CubeRng;
 use embassy_time::Timer;
 
-use crate::App;
+use crate::{buzzer::Buzzer, ledc::LedControl, App, RNG};
 
 /// 表情
-#[derive(Debug)]
+/// 左上角为坐标原点
+#[derive(Debug, Default)]
 pub struct Face {
-    pub ram: [u8; 8],
+    pub data: [u8; 8],
+    frames: Vec<[u8; 8]>,
 }
 
 impl Face {
-    #[rustfmt::skip]
-    pub fn new() -> Self {
-        Self {
-            ram: [
-                0b00000000,
-                0b00000000,
-                0b00000000,
-                0b00000000,
-                0b00000000,
-                0b00000000,
-                0b00000000,
-                0b00000000,
-            ],
-        }
-    }
-
-    //在初级显存里写入指定坐标信息，数组最左下面为原点
-    pub fn work(&mut self, x: u8, y: u8, state: u8) {
-        //左下角为原点
-        //坐标系方向变换
-        //充电口为下（默认坐标系是充电口朝右，所以需要把坐标系逆时针旋转90度）
-        let x_m: u8 = 1; //用来做移位运算缓存
-        let x_b: u8 = self.ram[7 - y as usize];
-        //检查参数合理性
+    pub fn set_work(&mut self, x: u8, y: u8) {
         if x > 7 || y > 7 {
             return;
         }
+        self.data[y as usize] |= (1 << (7 - x));
+    }
 
-        if state == 1 {
-            //点亮
-            self.ram[7 - y as usize] = x_b | (x_m << (7 - x));
-        } else if state == 0 {
-            //熄灭
-            self.ram[7 - y as usize] = x_b & (!(x_m << (7 - x)));
+    pub fn clear_work(&mut self, x: u8, y: u8) {
+        if x > 7 || y > 7 {
+            return;
         }
+        self.data[y as usize] ^= (1 << (7 - x));
     }
 
     pub fn clear(&mut self) {
-        self.ram.iter_mut().for_each(|r| *r = 0);
+        self.data.iter_mut().for_each(|r| *r = 0);
     }
 
     /// 呆滞眼
     pub fn slack_eyes(&mut self, x: u8, y: u8) {
         // 左眼
-        self.work(x, y, 1);
-        self.work(x, y + 1, 1);
-        self.work(x + 1, y, 1);
-        self.work(x + 1, y + 1, 1);
+        self.set_work(x, 7 - y);
+        self.set_work(x, 7 - y - 1);
+        self.set_work(x + 1, 7 - y);
+        self.set_work(x + 1, 7 - y - 1);
 
         // 右眼
-        self.work(x + 4, y, 1);
-        self.work(x + 4, y + 1, 1);
-        self.work(x + 5, y, 1);
-        self.work(x + 5, y + 1, 1);
+        self.set_work(x + 4, 7 - y);
+        self.set_work(x + 4, 7 - y - 1);
+        self.set_work(x + 5, 7 - y);
+        self.set_work(x + 5, 7 - y - 1);
     }
 
     /// 闭眼
     pub fn close_eyes(&mut self) {
         // 左眼
-        self.work(0, 4, 1);
-        self.work(1, 4, 1);
-        self.work(2, 4, 1);
+        self.set_work(0, 3);
+        self.set_work(1, 3);
+        self.set_work(2, 3);
 
         // 右眼
-        self.work(5, 4, 1);
-        self.work(6, 4, 1);
-        self.work(7, 4, 1);
+        self.set_work(5, 3);
+        self.set_work(6, 3);
+        self.set_work(7, 3);
     }
 
     /// 大笑眼
     pub fn laugh_eyes(&mut self) {
         // 左眼
-        self.work(0, 4, 1);
-        self.work(1, 5, 1);
-        self.work(2, 4, 1);
+        self.set_work(0, 3);
+        self.set_work(1, 2);
+        self.set_work(2, 3);
 
         // 右眼
-        self.work(5, 4, 1);
-        self.work(6, 5, 1);
-        self.work(7, 4, 1);
+        self.set_work(5, 3);
+        self.set_work(6, 2);
+        self.set_work(7, 3);
     }
 
     /// 生气眼
     pub fn angry_eyes(&mut self) {
         // 左眼
-        self.work(1, 4, 1);
-        self.work(1, 6, 1);
-        self.work(2, 5, 1);
-        self.work(3, 4, 1);
+        self.set_work(1, 1);
+        self.set_work(1, 3);
+        self.set_work(2, 2);
+        self.set_work(3, 3);
 
         // 右眼
-        self.work(4, 4, 1);
-        self.work(5, 5, 1);
-        self.work(6, 6, 1);
-        self.work(6, 4, 1);
+        self.set_work(4, 3);
+        self.set_work(5, 2);
+        self.set_work(6, 1);
+        self.set_work(6, 3);
     }
 
     /// 虚眼
     pub fn slightly_closed_eyes(&mut self) {
         // 左眼
-        self.work(1, 3, 1);
-        self.work(1, 4, 1);
-        self.work(2, 4, 1);
-        self.work(0, 4, 1);
+        self.set_work(1, 4);
+        self.set_work(1, 3);
+        self.set_work(2, 3);
+        self.set_work(0, 3);
 
         // 右眼
-        self.work(6, 3, 1);
-        self.work(5, 4, 1);
-        self.work(6, 4, 1);
-        self.work(7, 4, 1);
+        self.set_work(6, 4);
+        self.set_work(5, 3);
+        self.set_work(6, 3);
+        self.set_work(7, 3);
     }
 
     /// 呆滞嘴
     pub fn slack_mouth(&mut self) {
-        self.work(3, 2, 1);
-        self.work(4, 2, 1);
+        self.set_work(3, 5);
+        self.set_work(4, 5);
     }
 
     /// 无奈嘴
     pub fn powerless_mouth(&mut self) {
-        self.work(2, 1, 1);
-        self.work(3, 1, 1);
-        self.work(4, 1, 1);
-        self.work(5, 1, 1);
+        self.set_work(2, 6);
+        self.set_work(3, 6);
+        self.set_work(4, 6);
+        self.set_work(5, 6);
     }
 
     /// 嘟嘴
     pub fn pout_mouth(&mut self) {
-        self.work(3, 1, 1);
-        self.work(3, 2, 1);
-        self.work(4, 1, 1);
-        self.work(4, 2, 1);
+        self.set_work(3, 6);
+        self.set_work(3, 5);
+        self.set_work(4, 6);
+        self.set_work(4, 5);
     }
 
     /// 惊恐嘴
     pub fn terrify_mouth(&mut self) {
-        self.work(2, 1, 1);
-        self.work(2, 2, 1);
-        self.work(3, 0, 1);
-        self.work(3, 3, 1);
-        self.work(4, 0, 1);
-        self.work(4, 3, 1);
-        self.work(5, 1, 1);
-        self.work(5, 2, 1);
+        self.set_work(2, 6);
+        self.set_work(2, 5);
+        self.set_work(3, 7);
+        self.set_work(3, 4);
+        self.set_work(4, 7);
+        self.set_work(4, 4);
+        self.set_work(5, 6);
+        self.set_work(5, 5);
     }
 
     /// 大笑嘴
     pub fn laugh_mouth(&mut self) {
-        self.work(3, 1, 1);
-        self.work(4, 1, 1);
-        self.work(2, 2, 1);
-        self.work(5, 2, 1);
+        self.set_work(3, 6);
+        self.set_work(4, 6);
+        self.set_work(2, 5);
+        self.set_work(5, 5);
     }
 
     /// 生气嘴
     pub fn angry_mouth(&mut self) {
-        self.work(3, 2, 1);
-        self.work(4, 2, 1);
-        self.work(2, 1, 1);
-        self.work(5, 1, 1);
+        self.set_work(3, 5);
+        self.set_work(4, 5);
+        self.set_work(2, 6);
+        self.set_work(5, 6);
     }
 
-    /// 休眠表情
-    pub async fn dormancy_face<T: esp_hal::i2c::Instance>(&mut self, _app: &App<'_, T>) {
-        // byte beeper_old = beeper;
-        // beeper = 1;
+    /// 呆滞表情
+    pub fn slack_face(&mut self, x: u8, y: u8) {
+        self.clear();
+        self.slack_eyes(x, y);
+        self.slack_mouth();
+    }
+
+    /// 嘟嘴表情
+    pub fn pout_face(&mut self, x: u8, y: u8) {
+        self.clear();
+        self.slack_eyes(x, y);
+        self.pout_mouth();
+    }
+
+    /// 眨眼动画
+    pub async fn blink_animate<'d>(
+        &mut self,
+        x: u8,
+        y: u8,
+        ledc: &mut LedControl<'d>,
+        buzzer: &mut Buzzer<'d>,
+    ) {
+        self.clear();
+        self.close_eyes();
+        self.laugh_mouth();
+        ledc.write_bytes(self.data);
+        Timer::after_millis(80).await;
+
+        buzzer.tone(6000, 50);
+
+        self.clear();
+        self.slack_eyes(x, y);
+        self.laugh_mouth();
+        ledc.write_bytes(self.data);
+        Timer::after_millis(500).await;
+    }
+
+    /// 休眠动画
+    pub async fn dormancy_animate<'d>(
+        &mut self,
+        ledc: &mut LedControl<'d>,
+        buzzer: &mut Buzzer<'d>,
+    ) {
         let ex: u8 = 1;
         let ey: u8 = 4;
 
-        //while(1){//动作循环开始
-        ///////////东张西望
-        //呆滞嘴
-        self.clear();
-        self.slack_mouth();
-        //呆滞眼
-        self.slack_eyes(ex, ey);
-        Timer::after_millis(200).await;
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 500; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
+        // 东张西望
+        self.slack_face(ex, ey);
+        ledc.write_bytes(self.data);
+        Timer::after_millis(500).await;
 
-        // if (beeper) {
-        //   tone(10, 6000, 50);
-        // }
+        buzzer.tone(6000, 50);
+
         //呆滞眼左看
-        self.clear();
-        self.slack_eyes(ex - 1, ey);
-        self.slack_mouth();
-        Timer::after_millis(200).await;
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
+        self.slack_face(ex - 1, ey);
+        ledc.write_bytes(self.data);
+        Timer::after_millis(400).await;
 
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 400; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
+        // 眼神复位
+        self.slack_face(ex, ey);
+        ledc.write_bytes(self.data);
+        Timer::after_millis(10).await;
+
+        buzzer.tone(6000, 50);
 
         //呆滞眼右看
-        self.clear();
-        self.slack_eyes(ex, ey);
-        self.slack_mouth();
-        Timer::after_millis(200).await;
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 10; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
-        //
+        self.slack_face(ex + 1, ey);
+        ledc.write_bytes(self.data);
+        Timer::after_millis(500).await;
 
-        self.clear();
+        // 眼神复位
+        self.slack_face(ex, ey);
+        ledc.write_bytes(self.data);
+        Timer::after_millis(500).await;
 
-        // if (beeper) {
-        //   tone(10, 6000, 50);
-        // }
-        self.slack_eyes(ex + 1, ey);
-        self.slack_mouth();
-        Timer::after_millis(200).await;
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 500; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
-        //
-
-        //眼神复位
-        self.clear();
-        self.slack_eyes(ex, ey);
-        self.slack_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 500; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
-
-        /////////////眨眼后微笑再眨眼
         //微笑
         self.clear();
         self.slack_eyes(ex, ey);
         self.laugh_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 1000; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
+        ledc.write_bytes(self.data);
+        Timer::after_millis(1000).await;
 
         //眨眼
-        self.clear();
-        self.close_eyes();
-        self.laugh_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-        // //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 80; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
+        for _ in 0..3 {
+            self.blink_animate(ex, ey, ledc, buzzer).await;
+            self.blink_animate(ex, ey, ledc, buzzer).await;
+            self.blink_animate(ex, ey, ledc, buzzer).await;
+        }
 
-        self.clear();
-        // if (beeper) {
-        //   tone(10, 6000, 50);
-        // }
-        self.slack_eyes(ex, ey);
-        self.laugh_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
+        for _ in 0..6 {
+            let freq =
+                unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random_range(3000..=9000) };
+            buzzer.tone(freq as u64, 50);
 
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 500; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
-        //眨眼
-        self.clear();
-        self.close_eyes();
-        self.laugh_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 80; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
+            // 呆滞嘴
+            self.slack_face(ex, ey);
+            ledc.write_bytes(self.data);
+            Timer::after_millis(100).await;
 
-        self.clear();
-        // if (beeper) {
-        //   tone(10, 6000, 50);
-        // }
-        self.slack_eyes(ex, ey);
-        self.laugh_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
+            let freq =
+                unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random_range(3000..=9000) };
+            buzzer.tone(freq as u64, 50);
 
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 500; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
-        //眨眼
+            // 嘟嘴
+            self.pout_face(ex, ey);
+            ledc.write_bytes(self.data);
+            Timer::after_millis(200).await;
+        }
 
-        self.clear();
-        self.close_eyes();
-        self.laugh_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 80; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
-
-        self.clear();
-        // if (beeper) {
-        //   tone(10, 6000, 50);
-        // }
-        self.slack_eyes(ex, ey);
-        self.laugh_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 900; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
-        //
-
-        /////////////平静地说话
-        //呆滞嘴
-        self.clear();
-        // if (beeper) {
-        //   tone(10, random(3000, 9000), 50);
-        // }
-        self.slack_eyes(ex, ey);
-        self.slack_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 100; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
-        //嘟嘴
-
-        self.clear();
-        // if (beeper) {
-        //   tone(10, random(3000, 9000), 50);
-        // }
-        self.slack_eyes(ex, ey);
-        self.pout_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 200; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
-        //呆滞嘴
-
-        self.clear();
-        self.slack_eyes(ex, ey);
-        self.slack_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-        //嘟嘴
-
-        self.clear();
-        // if (beeper) {
-        //   tone(10, random(3000, 9000), 50);
-        // }
-        self.slack_eyes(ex, ey);
-        self.pout_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 200; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
-        //呆滞嘴
-
-        self.clear();
-        self.slack_eyes(ex, ey);
-        self.slack_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-        //嘟嘴
-
-        self.clear();
-        // if (beeper) {
-        //   tone(10, random(3000, 9000), 50);
-        // }
-        self.slack_eyes(ex, ey);
-        self.pout_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 200; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
-        //呆滞嘴
-
-        self.clear();
-        self.slack_eyes(ex, ey);
-        self.slack_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-
-        //说第二句
-
-        //呆滞嘴
-        self.clear();
-        // if (beeper) {
-        //   tone(10, random(3000, 9000), 50);
-        // }
-        self.slack_eyes(ex, ey);
-        self.slack_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 100; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
-        //嘟嘴
-
-        self.clear();
-        // if (beeper) {
-        //   tone(10, random(3000, 9000), 50);
-        // }
-        self.slack_eyes(ex, ey);
-        self.pout_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 200; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
-        //呆滞嘴
-
-        self.clear();
-        self.slack_eyes(ex, ey);
-        self.slack_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-        //嘟嘴
-
-        self.clear();
-        // if (beeper) {
-        //   tone(10, random(3000, 9000), 50);
-        // }
-        self.slack_eyes(ex, ey);
-        self.pout_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 200; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
-        //呆滞嘴
-
-        self.clear();
-        self.slack_eyes(ex, ey);
-        self.slack_mouth();
-        Timer::after_millis(200).await;
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-        //嘟嘴
-
-        self.clear();
-        // if (beeper) {
-        //     tone(10, random(3000, 9000), 50);
-        // }
-        self.slack_eyes(ex, ey);
-        self.pout_mouth();
-        Timer::after_millis(200).await;
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 200; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
-        //呆滞嘴
-
-        self.clear();
-        self.slack_eyes(ex, ey);
-        self.slack_mouth();
-        Timer::after_millis(200).await;
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 800; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
-
-        ///////////////眨眼等待
-        //眨眼
-        self.clear();
-        // if (beeper) {
-        //   tone(10, 8000, 50);
-        // }
-        self.close_eyes();
-        self.slack_mouth();
-        Timer::after_millis(200).await;
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 100; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
-
-        self.clear();
-        self.slack_eyes(ex, ey);
-        self.slack_mouth();
-        Timer::after_millis(200).await;
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 700; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
-        //眨眼
-
-        self.clear();
-        // if (beeper) {
-        //   tone(10, 5000, 50);
-        // }
-        self.close_eyes();
-        self.slack_mouth();
-        Timer::after_millis(200).await;
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 100; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
-
-        self.clear();
-        self.slack_eyes(ex, ey);
-        self.slack_mouth();
-        Timer::after_millis(200).await;
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 1000; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
-
-        // beeper = beeper_old;
-        //重复整个过程
-        //}//循环结束
+        //眨眼等待
+        for _ in 0..2 {
+            self.blink_animate(ex, ey, ledc, buzzer).await;
+            self.blink_animate(ex, ey, ledc, buzzer).await;
+        }
     }
 
-    /// 唤醒表情
-    pub fn rouse_face(&mut self) {
-        // byte beeper_old = beeper;
-        // beeper = 1;
+    /// 唤醒动画
+    pub async fn wakeup_animate<'d>(&mut self, ledc: &mut LedControl<'d>, buzzer: &mut Buzzer<'d>) {
         let ex: u8 = 1;
         let ey: u8 = 4;
-        self.clear();
-        ///////////////眨眼等待
-        //眨眼
-        // if (beeper) {
-        //   tone(10, 8000, 50);
-        // }
-        self.close_eyes();
-        self.slack_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
 
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 100; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
+        for _ in 0..2 {
+            buzzer.tone(8000, 50);
+            self.clear();
+            self.close_eyes();
+            self.slack_mouth();
+            ledc.write_bytes(self.data);
+            Timer::after_millis(100).await;
 
-        self.clear();
-        self.slack_eyes(ex, ey);
-        self.slack_mouth();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 700; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
-
-        //眨眼
-        self.clear();
-        // if (beeper) {
-        //   tone(10, 5000, 50);
-        // }
-        self.close_eyes();
-        self.slack_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 100; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
-        self.clear();
-        self.slack_eyes(ex, ey);
-        self.slack_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-        //设置每次动画结束后的间隔时长
-        // for (int i = 0; i < 1000; i++) {
-        //   zhonglifangxiang_panduan();
-        //   if (zhonglifangxiang_old != lc.zhonglifangxiang) {  //当重力方向改变时刷新画面
-        //     lc.bitmap(lc.LedBuffer_work);                     //  让充电池上方对着充电口
-        //     lc.UpLoad();
-        //   }
-        // }
-
-        // beeper = beeper_old;
+            self.clear();
+            self.slack_eyes(ex, ey);
+            self.slack_mouth();
+            ledc.write_bytes(self.data);
+            Timer::after_millis(700).await;
+        }
     }
 
-    /// FIXME 破记录
-    pub async fn break_record_face<T: esp_hal::i2c::Instance>(&mut self, _app: &App<'_, T>) {
-        // TODO 开启声音
-        let _beeper: u8 = 1;
-
+    /// 破记录动画
+    pub async fn break_record_animate<'d>(
+        &mut self,
+        ledc: &mut LedControl<'d>,
+        buzzer: &mut Buzzer<'d>,
+    ) {
         let ex = 1;
         let ey = 4;
 
-        //惊讶嘴
-        self.clear();
-        self.terrify_mouth();
-        //呆滞眼
-        self.slack_eyes(ex, ey);
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-        Timer::after_millis(500).await;
+        for _ in 0..3 {
+            self.clear();
+            self.slack_eyes(ex, ey);
+            self.terrify_mouth();
+            ledc.write_bytes(self.data);
+            Timer::after_millis(500).await;
 
-        //眨眼
-        self.clear();
-        // if (beeper) {
-        //     tone(10, 8000, 50);
-        // }
-        self.close_eyes();
-        self.terrify_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-        Timer::after_millis(100).await;
+            buzzer.tone(8000, 50);
+
+            self.clear();
+            self.close_eyes();
+            self.terrify_mouth();
+            ledc.write_bytes(self.data);
+            Timer::after_millis(100).await;
+        }
 
         self.clear();
         self.slack_eyes(ex, ey);
         self.terrify_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
+        ledc.write_bytes(self.data);
         Timer::after_millis(700).await;
 
-        //眨眼
-        self.clear();
-        // if (beeper) {
-        //     tone(10, 8000, 50);
-        // }
-        self.close_eyes();
-        self.terrify_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-        Timer::after_millis(100).await;
-
-        self.clear();
-        self.slack_eyes(ex, ey);
-        self.terrify_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-        Timer::after_millis(700).await;
-
-        //眨眼
-        self.clear();
-        // if (beeper) {
-        //     tone(10, 8000, 50);
-        // }
-        self.close_eyes();
-        self.terrify_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-        Timer::after_millis(100).await;
-
-        self.clear();
-        self.slack_eyes(ex, ey);
-        self.terrify_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
-        Timer::after_millis(700).await;
-
-        //微笑
         self.clear();
         self.slack_eyes(ex, ey);
         self.laugh_mouth();
-        // zhonglifangxiang_panduan();
-        // lc.bitmap(lc.LedBuffer_work);
-        // lc.UpLoad();
+        ledc.write_bytes(self.data);
         Timer::after_millis(1000).await;
-        // beeper = beeper_old;
     }
 }

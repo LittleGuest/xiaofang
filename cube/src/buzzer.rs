@@ -6,7 +6,7 @@ use crate::RNG;
 
 /// 蜂鸣器
 pub struct Buzzer<'d> {
-    open: bool,
+    pub open: bool,
     pwm: LEDC<'d>,
 }
 
@@ -15,15 +15,22 @@ impl<'d> Buzzer<'d> {
         Self { open: true, pwm }
     }
 
+    pub fn open(&mut self) {
+        self.open = true;
+    }
+
+    pub fn close(&mut self) {
+        self.open = false;
+    }
+
     /// 发声
     /// frequency: 发声频率,单位HZ
     /// duration: 发声时长,负数表示一直发声,单位微妙
-    pub fn tone(&mut self, frequency: u32, duration: i32) {
+    pub fn tone(&mut self, frequency: u64, duration: u64) {
         if !self.open {
             return;
         }
 
-        // unimplemented!()
         // let mut channel0 = self.ledc.get_channel(
         //     channel::Number::Channel0,
         //     io.pins.gpio8.into_push_pull_output(),
@@ -49,11 +56,7 @@ impl<'d> Buzzer<'d> {
 
     ///停止发声
     pub fn no_tone(&mut self) {
-        if !self.open {
-            return;
-        }
-
-        // unimplemented!()
+        self.close();
     }
 
     /// 菜单选择音效
@@ -171,7 +174,7 @@ impl<'d> Buzzer<'d> {
     }
 
     /// 沙漏结束音效
-    pub async fn timer_over(&mut self) {
+    pub async fn timers_over(&mut self) {
         if !self.open {
             return;
         }
@@ -249,7 +252,7 @@ impl<'d> Buzzer<'d> {
         }
         self.tone(
             unsafe {
-                CubeRng(RNG.assume_init_mut().random() as u64).random_range(3000..=9000) as u32
+                CubeRng(RNG.assume_init_mut().random() as u64).random_range(3000..=9000) as u64
             },
             50,
         );

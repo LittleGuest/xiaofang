@@ -15,6 +15,7 @@ use esp_hal::spi::SpiMode;
 use esp_hal::timer::TimerGroup;
 use esp_hal::Blocking;
 use esp_hal::{clock::ClockControl, i2c::I2C, peripherals::Peripherals, prelude::*};
+use log::info;
 use mpu6050_dmp::address::Address;
 use mpu6050_dmp::sensor::Mpu6050;
 
@@ -119,5 +120,24 @@ async fn main(spawner: Spawner) {
     let rng = esp_hal::rng::Rng::new(peripherals.RNG);
     unsafe { cube::RNG.write(rng) };
 
-    cube::App::new(mpu, ledc, buzzer).run().await
+    // let mut bytes = [0u8; 32];
+    // let mut flash = FlashStorage::new();
+    // let flash_addr = 0x9100;
+    // info!("Flash size = {}", flash.capacity());
+    //
+    // flash.read(flash_addr, &mut bytes).unwrap();
+    // info!("Read from {:x}:  {:02x?}", flash_addr, &bytes[..32]);
+    // info!("Read from {}:  {:?}", flash_addr, &bytes[..32]);
+    //
+    // bytes[0x00] = bytes[0x00].wrapping_add(1);
+    //
+    // flash.write(flash_addr, &bytes).unwrap();
+    // info!("Written to {:x}: {:02x?}", flash_addr, &bytes[..32]);
+    // info!("Written to {}: {:?}", flash_addr, &bytes[..32]);
+    //
+    // let mut reread_bytes = [0u8; 32];
+    // flash.read(flash_addr, &mut reread_bytes).unwrap();
+    // info!("Read from {:x}:  {:02x?}", flash_addr, &reread_bytes[..32]);
+
+    cube::App::new(mpu, ledc, buzzer).run().await;
 }

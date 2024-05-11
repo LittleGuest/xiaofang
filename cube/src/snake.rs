@@ -13,7 +13,10 @@ pub struct SnakeGame {
     food: Food,
     /// ms
     waiting_time: u64,
+    /// 得分
     score: u8,
+    /// 最高分
+    pub highest: u8,
     game_over: bool,
 }
 
@@ -21,6 +24,7 @@ impl SnakeGame {
     pub fn new() -> Self {
         let width = 8;
         let height = 8;
+
         Self {
             width,
             height,
@@ -28,6 +32,7 @@ impl SnakeGame {
             food: Food::random(width, height),
             waiting_time: 600,
             score: 0,
+            highest: 0,
             game_over: false,
         }
     }
@@ -38,16 +43,21 @@ impl SnakeGame {
 
         loop {
             if self.game_over {
-                // TODO 历史最高分动画,音乐
                 app.ledc.draw_score(self.score);
-                Timer::after_millis(3000).await;
+                Timer::after_millis(1500).await;
+                if self.score > self.highest {
+                    self.highest = self.score;
+                    app.face
+                        .break_record_animate(&mut app.ledc, &mut app.buzzer)
+                        .await;
+                }
+                Timer::after_millis(500).await;
                 break;
             }
             app.gravity_direction();
             self.r#move(&app.gd);
-            // TODO 移动音效,得分音效和画面效果,死亡音效
+            // TODO: 移动音效,得分音效和画面效果,死亡音效
             self.draw(app);
-
             Timer::after_millis(self.waiting_time).await;
         }
     }
@@ -98,7 +108,6 @@ impl SnakeGame {
     pub fn draw<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         let ledc = &mut app.ledc;
         ledc.clear();
-        // ledc.clear_work();
         let mut tmp = self.snake.as_bytes();
         for (i, s) in tmp.iter_mut().enumerate() {
             if i == self.food.y as usize {

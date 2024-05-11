@@ -28,14 +28,13 @@ impl core::default::Default for Timers {
 impl Timers {
     fn init<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         app.ledc.clear();
-        // app.ledc.clear_work();
         app.gravity_direction();
         app.ledc.write_pixels(self.pixels());
 
         // Timer::after_millis(1000).await;
         // // 闪烁三次配音效后开始
         // (0..3).for_each(|_| {
-        //     // TODO 音效
+        //     // TODO: 音效
         //     app.ledc.set_brightness(0x01);
         // Timer::after_millis(50).await;
         //     app.ledc.set_brightness(0x00);
@@ -107,8 +106,7 @@ impl TimerPixel {
             self.pixel.1 = BinaryColor::from(self.pixel.1).invert().into();
             app.ledc.write_pixel(self.pixel);
             Timer::after_millis(100).await;
-            // TODO 闪烁音效
-            app.buzzer.timer_pixel_blinky();
+            app.buzzer.timer_pixel_blinky().await;
         }
     }
 

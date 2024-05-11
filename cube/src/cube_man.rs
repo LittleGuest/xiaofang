@@ -46,7 +46,7 @@ impl CubeManGame {
 
         loop {
             if self.game_over {
-                // TODO 历史最高分动画,音乐
+                // TODO: 历史最高分动画,音乐
                 app.ledc.draw_score(self.score);
                 Timer::after_millis(3000).await;
                 break;
@@ -79,7 +79,7 @@ impl CubeManGame {
             dbg!(&self.floors);
 
             self.r#move(app);
-            // TODO 移动音效,得分音效和画面效果,死亡音效
+            // TODO: 移动音效,得分音效和画面效果,死亡音效
             self.draw(app);
 
             Timer::after_millis(self.waiting_time).await;
@@ -105,7 +105,7 @@ impl CubeManGame {
                 &np,
             ) {
                 self.moving_on_floor(&floor, app);
-                // TODO 随地板一起向上运动
+                // TODO: 随地板一起向上运动
             } else {
                 self.man.fall();
             }
@@ -317,7 +317,7 @@ impl FloorGen {
             data.push((i, 0).into());
         }
 
-        // TODO 根据关卡等级生成地板
+        // TODO: 根据关卡等级生成地板
         let floor = if level <= 50 {
             Floor::new(FloorType::Normal, &data)
         } else if level > 50 && level <= 150 {

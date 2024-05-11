@@ -124,17 +124,14 @@ impl BaGua {
             if (accel.x() > 0.3 || accel.x() < -0.3)
                 && (accel.y() > 0.3 || accel.y() < -0.3)
                 && (0..30)
-                    // .map(|_| (app.accel().x().abs(), app.accel().y().abs()))
-                    // .any(|(x, y)| x > 0.3 && y > 0.3)
                     .map(|_| (app.accel().x(), app.accel().y()))
                     .any(|(x, y)| !(-0.3..=0.3).contains(&x) && !(-0.3..=0.3).contains(&y))
             {
-                app.ledc.bitmap(Self::random());
-                app.ledc.upload();
+                app.ledc.write_bytes(Self::random());
             }
             Timer::after_millis(800).await;
 
-            // TODO 退出占卦模式
+            // TODO: 退出占卦模式
         }
     }
 }

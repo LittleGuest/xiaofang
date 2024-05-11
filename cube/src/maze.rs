@@ -77,7 +77,7 @@ impl Maze {
 
         loop {
             if self.game_over {
-                // TODO 结束动画和音乐
+                // TODO: 结束动画和音乐
                 Timer::after_millis(3000).await;
                 break;
             }
@@ -190,7 +190,7 @@ struct MazeMap {
 
 impl MazeMap {
     fn new(width: usize, height: usize) -> Self {
-        // 使用地图生成算法生成地图 TODO 迷宫大小,使用的算法都随机
+        // 使用地图生成算法生成地图 TODO: 迷宫大小,使用的算法都随机
         let mut data = Vec::<Vec<Option<Position>>>::with_capacity(height);
         for _ in 0..height {
             let mut tmp = Vec::<Option<Position>>::with_capacity(width);

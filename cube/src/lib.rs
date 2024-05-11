@@ -15,8 +15,12 @@ use embedded_graphics_core::{
     pixelcolor::{BinaryColor, Rgb888},
     Pixel,
 };
+use embedded_storage::{ReadStorage, Storage};
 use esp_hal::{i2c::I2C, rng::Rng, Blocking};
+use esp_storage::FlashStorage;
+use face::Face;
 use ledc::LedControl;
+use log::info;
 use maze::Maze;
 use mpu6050_dmp::{
     accel::{AccelF32, AccelFullScale},
@@ -213,7 +217,7 @@ where
     /// 当前界面的索引
     ui_current_idx: i8,
     /// 表情
-    // face: Face,
+    face: Face,
     gd: Gd,
 
     mpu6050: Mpu6050<I2C<'d, T, Blocking>>,
@@ -272,7 +276,7 @@ where
         App {
             uis: Ui::uis(),
             ui_current_idx: 0,
-            // face: Face::new(),
+            face: Face::default(),
             gd: Gd::default(),
 
             mpu6050,
@@ -286,6 +290,16 @@ where
     }
 
     pub async fn run(mut self) -> ! {
+        let flash_addr = 0x9100;
+        let mut flash = FlashStorage::new();
+        let mut flash_data = [0u8; 8];
+        flash.read(flash_addr, &mut flash_data).ok();
+        info!(
+            "Read flash data from {:x}:  {:02x?}",
+            flash_addr,
+            &flash_data[..8]
+        );
+
         loop {
             Timer::after_millis(600).await;
 
@@ -298,35 +312,33 @@ where
             }
 
             match self.gd {
-                Gd::None => {
-                    self.ledc
-                        .write_bytes(self.uis[self.ui_current_idx as usize].ui());
-
-                    self.ledc
-                        .write_bytes(self.uis[self.ui_current_idx as usize].ui());
-                }
-                Gd::Up => {
-                    // 向上进入对应的界面
-                    let ui = &self.uis[self.ui_current_idx as usize];
-                    match ui {
-                        Ui::Timer => Timers::default().run(&mut self).await,
-                        Ui::Dice => Dice.run(&mut self).await,
-                        Ui::Snake => SnakeGame::new().run(&mut self).await,
-                        Ui::BaGua => BaGua::run(&mut self).await,
-                        Ui::Maze => {
-                            let mut cr = unsafe {
-                                CubeRng(RNG.assume_init_mut().random() as u64).random_range(19..=33)
-                            };
-                            if cr % 2 == 0 {
-                                cr += 1;
-                            }
-                            Maze::new(cr, cr).run(&mut self);
-                        }
-                        Ui::CubeMan => CubeManGame::new().run(&mut self).await,
-                        Ui::Sokoban => {}
-                        Ui::Sound => {}
+                // 向上进入对应的界面
+                Gd::Up => match self.uis[self.ui_current_idx as usize] {
+                    Ui::Timer => Timers::default().run(&mut self).await,
+                    Ui::Dice => Dice.run(&mut self).await,
+                    Ui::Snake => {
+                        let mut snake = SnakeGame::new();
+                        // 最高分从flash中获取
+                        snake.highest = flash_data[0x00];
+                        snake.run(&mut self).await;
+                        // 游戏结束将最高分再次写入flash
+                        flash_data[0x00] = snake.highest;
+                        flash.write(flash_addr, &flash_data).ok();
                     }
-                }
+                    Ui::BaGua => BaGua::run(&mut self).await,
+                    Ui::Maze => {
+                        let mut cr = unsafe {
+                            CubeRng(RNG.assume_init_mut().random() as u64).random_range(19..=33)
+                        };
+                        if cr % 2 == 0 {
+                            cr += 1;
+                        }
+                        Maze::new(cr, cr).run(&mut self).await;
+                    }
+                    Ui::CubeMan => CubeManGame::new().run(&mut self).await,
+                    Ui::Sokoban => {}
+                    Ui::Sound => {}
+                },
                 Gd::Right => {
                     self.ui_current_idx += 1;
                     if self.ui_current_idx >= self.uis.len() as i8 {
@@ -343,7 +355,10 @@ where
                     self.ledc
                         .write_bytes(self.uis[self.ui_current_idx as usize].ui());
                 }
-                _ => {}
+                _ => {
+                    self.ledc
+                        .write_bytes(self.uis[self.ui_current_idx as usize].ui());
+                }
             }
         }
     }
