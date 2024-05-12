@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 #![feature(slice_flatten)]
+#![allow(unused)]
 
 use core::{mem::MaybeUninit, ops::RangeBounds};
 
@@ -61,14 +62,14 @@ struct PositionVec(Vec<Position>);
 /// 左上角为坐标原点,横x,纵y
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 struct Position {
-    x: i8,
-    y: i8,
+    x: i32,
+    y: i32,
 }
 impl From<(usize, usize)> for Position {
     fn from(value: (usize, usize)) -> Self {
         Self {
-            x: value.0 as i8,
-            y: value.1 as i8,
+            x: value.0 as i32,
+            y: value.1 as i32,
         }
     }
 }
@@ -80,11 +81,11 @@ impl FromIterator<(usize, usize)> for PositionVec {
 }
 
 impl Position {
-    fn new(x: i8, y: i8) -> Self {
+    fn new(x: i32, y: i32) -> Self {
         Position { x, y }
     }
 
-    fn r#_move(&mut self, d: Direction) {
+    fn r#move(&mut self, d: Direction) {
         match d {
             Direction::Up => {
                 self.y -= 1;
@@ -109,11 +110,11 @@ impl Position {
         pos
     }
 
-    fn random(x: i8, y: i8) -> Self {
+    fn random(x: i32, y: i32) -> Self {
         unsafe {
             Self {
-                x: CubeRng(RNG.assume_init_mut().random() as u64).random(0, x as u32) as i8,
-                y: CubeRng(RNG.assume_init_mut().random() as u64).random(0, y as u32) as i8,
+                x: CubeRng(RNG.assume_init_mut().random() as u64).random(0, x as u32) as i32,
+                y: CubeRng(RNG.assume_init_mut().random() as u64).random(0, y as u32) as i32,
             }
         }
     }
@@ -128,8 +129,8 @@ impl Position {
     fn random_range_usize(x: impl RangeBounds<usize>, y: impl RangeBounds<usize>) -> Self {
         unsafe {
             Self {
-                x: CubeRng(RNG.assume_init_mut().random() as u64).random_range(x) as i8,
-                y: CubeRng(RNG.assume_init_mut().random() as u64).random_range(y) as i8,
+                x: CubeRng(RNG.assume_init_mut().random() as u64).random_range(x) as i32,
+                y: CubeRng(RNG.assume_init_mut().random() as u64).random_range(y) as i32,
             }
         }
     }
@@ -137,13 +138,13 @@ impl Position {
 
 impl From<Position> for Pixel<Rgb888> {
     fn from(p: Position) -> Self {
-        Self((p.x as i32, p.y as i32).into(), BinaryColor::On.into())
+        Self((p.x, p.y).into(), BinaryColor::On.into())
     }
 }
 
 impl From<&Position> for Pixel<Rgb888> {
     fn from(p: &Position) -> Self {
-        Self((p.x as i32, p.y as i32).into(), BinaryColor::On.into())
+        Self((p.x, p.y).into(), BinaryColor::On.into())
     }
 }
 
@@ -335,7 +336,15 @@ where
                         }
                         Maze::new(cr, cr).run(&mut self).await;
                     }
-                    Ui::CubeMan => CubeManGame::new().run(&mut self).await,
+                    Ui::CubeMan => {
+                        let mut cm = CubeManGame::new();
+                        // 最高分从flash中获取
+                        cm.highest = flash_data[0x01];
+                        cm.run(&mut self).await;
+                        // 游戏结束将最高分再次写入flash
+                        flash_data[0x01] = cm.highest;
+                        flash.write(flash_addr, &flash_data).ok();
+                    }
                     Ui::Sokoban => {}
                     Ui::Sound => {}
                 },

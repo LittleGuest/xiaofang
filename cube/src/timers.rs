@@ -88,14 +88,13 @@ impl Timers {
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct TimerPixel {
     pixel: Pixel<Rgb888>,
-    #[allow(unused)]
     speed: f32,
 }
 
 impl TimerPixel {
     fn new(pos: Position, speed: f32) -> Self {
         Self {
-            pixel: Pixel((pos.x as i32, pos.y as i32).into(), BinaryColor::On.into()),
+            pixel: Pixel((pos.x, pos.y).into(), BinaryColor::On.into()),
             speed,
         }
     }

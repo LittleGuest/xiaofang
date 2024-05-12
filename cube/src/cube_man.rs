@@ -4,12 +4,14 @@
 use alloc::{collections::VecDeque, vec::Vec};
 use cube_rand::CubeRng;
 use embassy_time::Timer;
+use embedded_graphics::pixelcolor::{Gray2, RgbColor};
 use embedded_graphics_core::{
     pixelcolor::{BinaryColor, Rgb888},
     prelude::WebColors,
     Pixel,
 };
 use esp_println::dbg;
+use log::{debug, info};
 
 use crate::{App, Gd, Position, RNG};
 
@@ -20,6 +22,7 @@ pub struct CubeManGame {
     floor_gen: FloorGen,
     depth: usize,
     score: u8,
+    pub highest: u8,
     game_over: bool,
     /// ms
     waiting_time: u64,
@@ -35,8 +38,9 @@ impl CubeManGame {
             floor_gen: FloorGen::new(),
             depth: 0,
             score: 0,
+            highest: 0,
             game_over: false,
-            waiting_time: 180,
+            waiting_time: 230,
         }
     }
 
@@ -46,39 +50,28 @@ impl CubeManGame {
 
         loop {
             if self.game_over {
-                // TODO: 历史最高分动画,音乐
                 app.ledc.draw_score(self.score);
-                Timer::after_millis(3000).await;
+                Timer::after_millis(1500).await;
+                if self.score > self.highest {
+                    self.highest = self.score;
+                    app.face
+                        .break_record_animate(&mut app.ledc, &mut app.buzzer)
+                        .await;
+                }
+                Timer::after_millis(500).await;
                 break;
             }
             app.gravity_direction();
-
             {
                 self.floors.pop_front();
-
-                let span =
-                    unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random_range(2..=3) };
-
-                let mut floor = self.floor_gen.floor(self.depth);
-                if let Some(ref mut floor) = floor {
-                    // floor
-                    //     .data
-                    //     .iter_mut()
-                    //     .for_each(|f| f.0.y += pb.data[0].0.y + span as i32);
-                }
-                self.floors.push_back(floor);
-
+                self.floors.push_back(self.floor_gen.floor(self.depth));
                 self.floors.iter_mut().for_each(|f| {
                     if let Some(f) = f {
                         f.data.iter_mut().for_each(|f| f.0.y -= 1);
                     }
                 });
             }
-
-            dbg!(&self.man.pos);
-            dbg!(&self.floors);
-
-            self.r#move(app);
+            self.r#move(app).await;
             // TODO: 移动音效,得分音效和画面效果,死亡音效
             self.draw(app);
 
@@ -95,22 +88,21 @@ impl CubeManGame {
             return;
         } else {
             self.man.r#move(app);
-            // 如果下面是楼层,在停在楼层上
+            // 如果下面是楼梯,在停在楼梯上
             if let Some(floor) = Self::on_floor(
                 &self
                     .floors
                     .iter()
                     .filter_map(|f| f.clone())
                     .collect::<Vec<_>>(),
-                &np,
+                &self.man.pos,
             ) {
+                // 随楼梯一起向上运动
+                self.man.up();
                 self.moving_on_floor(&floor, app);
-                // TODO: 随地板一起向上运动
             } else {
                 self.man.fall();
             }
-            // 左右移动时间
-            Timer::after_millis(70).await;
         }
     }
 
@@ -126,18 +118,19 @@ impl CubeManGame {
         pos.x < 0 || pos.x >= 8
     }
 
-    /// 是否在地板上
+    /// 是否在楼梯上
     fn on_floor(floors: &[Floor], pos: &Position) -> Option<Floor> {
         let floor = floors.iter().find(|f| {
+            let min = f.data.iter().min_by(|x, y| x.cmp(y)).unwrap();
+            let max = f.data.iter().max_by(|x, y| x.cmp(y)).unwrap();
             f.data
                 .iter()
-                .any(|p| p.0.x == pos.x as i32 && p.0.y == pos.y as i32 + 1)
+                .any(|p| min.0.x <= pos.x && pos.x <= max.0.x && p.0.y == pos.y + 1)
         });
-
         floor.cloned()
     }
 
-    /// 在地板上的移动
+    /// 在楼梯上的移动
     async fn moving_on_floor<T: esp_hal::i2c::Instance>(
         &mut self,
         floor: &Floor,
@@ -180,60 +173,26 @@ impl CubeManGame {
                 }
             }
             FloorType::Spring(h) => {
-                self.man.pos.y -= *h as i8;
+                self.man.pos.y -= *h as i32;
             }
-        }
+        };
     }
 
     pub fn draw<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
-        log::info!("level {:?}", self.depth);
-        log::info!("falled floor {:?}", self.floors);
         app.ledc.clear_with_color(BinaryColor::Off.into());
-        let mut pixels = Vec::<Pixel<Rgb888>>::new();
-        // 地板
-        // 将地图坐标转换为led坐标
-        for y in 0..8 {
-            if let Some(Some(floor)) = self.floors.get(y) {
-                // for x in 0..8 {
-                for d in floor.data.iter() {
-                    pixels.push(Pixel((d.0.x, d.0.y).into(), d.1));
-                }
-                // }
-            }
-        }
-        log::info!("draw pixels : {pixels:?}");
-        // for floor in self.floors.iter() {
-        //     for d in floor.data.iter() {
-        //         // pixels.push(Pixel((d.x as i32, d.y as i32).into(), floor.color));
-        //         pixels.push(d.clone());
-        //     }
-        // }
-        app.ledc.write_pixels(pixels);
+        // 楼梯
+        app.ledc.write_pixels(
+            self.floors
+                .iter()
+                .filter(|f| f.is_some())
+                .cloned()
+                .flat_map(|f| f.unwrap().data),
+        );
 
         // 人物
         let mp = self.man.pos;
         app.ledc
-            .write_pixel(Pixel((mp.x as i32, mp.y as i32).into(), self.man.color));
-
-        // 将地图坐标转换为led坐标
-        // for y in 0..8 {
-        //     for x in 0..8 {
-        //         if let Some(pixel) = self.vision.data[y][x] {
-        //             pixels.push(pixel);
-        //         }
-        //     }
-        // }
-        //
-        // let pp = {
-        //     let pp = self.man.pos;
-        //     let vp = self.vision.pos;
-        //     Pixel(
-        //         ((pp.x - vp.x) as i32, (pp.y - vp.y) as i32).into(),
-        //         self.man.color,
-        //     )
-        // };
-        // pixels.push(pp);
-        // app.ledc.write_pixels(pixels);
+            .write_pixel(Pixel((mp.x, mp.y).into(), self.man.color));
     }
 }
 
@@ -246,7 +205,7 @@ enum ConveyorDir {
     Counterclockwise,
 }
 
-/// 地板类型
+/// 楼梯类型
 #[derive(Debug, Clone, Copy)]
 enum FloorType {
     /// 正常
@@ -265,7 +224,7 @@ enum FloorType {
 //     }
 // }
 
-/// 地板
+/// 楼梯
 #[derive(Debug, Clone)]
 struct Floor {
     /// 类型
@@ -275,9 +234,35 @@ struct Floor {
 
 impl Floor {
     fn new(ft: FloorType, data: &[Position]) -> Self {
-        Self {
-            r#type: ft,
-            data: data.iter().map(|p| p.into()).collect::<Vec<_>>(),
+        match ft {
+            FloorType::Normal => Self {
+                r#type: ft,
+                data: data
+                    .iter()
+                    .map(|p| Pixel((p.x, p.y).into(), RgbColor::WHITE))
+                    .collect::<Vec<_>>(),
+            },
+            FloorType::Fragile(_) => Self {
+                r#type: ft,
+                data: data
+                    .iter()
+                    .map(|p| Pixel((p.x, p.y).into(), RgbColor::RED))
+                    .collect::<Vec<_>>(),
+            },
+            FloorType::Conveyor(_) => Self {
+                r#type: ft,
+                data: data
+                    .iter()
+                    .map(|p| Pixel((p.x, p.y).into(), RgbColor::GREEN))
+                    .collect::<Vec<_>>(),
+            },
+            FloorType::Spring(_) => Self {
+                r#type: ft,
+                data: data
+                    .iter()
+                    .map(|p| Pixel((p.x, p.y).into(), RgbColor::YELLOW))
+                    .collect::<Vec<_>>(),
+            },
         }
     }
 }
@@ -302,25 +287,25 @@ impl FloorGen {
         }
     }
 
-    /// 随机生成地板
+    /// 随机生成楼梯
     fn random(level: usize) -> Option<Floor> {
-        // 概率生成地板
+        // 概率生成楼梯
         let per = unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random_range(1..=10) };
         if per < 7 {
             return None;
         }
 
-        // 地板长度
+        // 楼梯长度
         let len = unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random_range(3..=5) };
         let mut data = Vec::<Position>::with_capacity(len);
         for i in 0..len {
             data.push((i, 0).into());
         }
 
-        // TODO: 根据关卡等级生成地板
-        let floor = if level <= 50 {
+        // TODO: 根据关卡等级生成楼梯
+        let floor = if level <= 5 {
             Floor::new(FloorType::Normal, &data)
-        } else if level > 50 && level <= 150 {
+        } else if level > 5 && level <= 150 {
             Floor::new(FloorType::Fragile(500), &data)
         } else {
             Floor::new(FloorType::Conveyor(ConveyorDir::Clockwise), &data)
@@ -330,6 +315,7 @@ impl FloorGen {
         Some(floor)
     }
 
+    /// 生成楼梯，y坐标为8
     fn floor(&mut self, level: usize) -> Option<Floor> {
         let mut floor = Self::random(level);
         if let Some(ref mut floor) = floor {
@@ -373,6 +359,7 @@ impl FloorGen {
     }
 }
 
+/// 方块人
 #[derive(Debug)]
 struct CubeMan {
     /// 位置
@@ -409,7 +396,13 @@ impl CubeMan {
         self.pos = self.next_pos(app);
     }
 
+    /// 下落
     fn fall(&mut self) {
         self.pos.y += 1;
+    }
+
+    /// 向上
+    fn up(&mut self) {
+        self.pos.y -= 1;
     }
 }

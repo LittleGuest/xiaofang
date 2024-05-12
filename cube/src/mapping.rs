@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 /// 数字0
 #[rustfmt::skip]
 pub const NUM_0: [u8; 8] = [

@@ -38,9 +38,9 @@ impl Sokoban {
         let vpx = {
             if player.pos.x - 3 <= 0 {
                 0
-            } else if player.pos.x + 5 >= width as i8 {
+            } else if player.pos.x + 5 >= width as i32 {
                 // W as i8 - 8 + (W as i8 - player.pos.x) - 1
-                player.pos.x - 8 + width as i8 - player.pos.x
+                player.pos.x - 8 + width as i32 - player.pos.x
             } else {
                 player.pos.x - 3
             }
@@ -48,9 +48,9 @@ impl Sokoban {
         let vpy = {
             if player.pos.y - 3 <= 0 {
                 0
-            } else if player.pos.y + 5 >= height as i8 {
+            } else if player.pos.y + 5 >= height as i32 {
                 // H as i8 - 8 + (H as i8 - player.pos.y) - 1
-                player.pos.y - 8 + height as i8 - player.pos.y
+                player.pos.y - 8 + height as i32 - player.pos.y
             } else {
                 player.pos.y - 3
             }
@@ -114,20 +114,14 @@ impl Sokoban {
         let pp = {
             let pp = self.map.epos;
             let vp = self.vision.pos;
-            Pixel(
-                ((pp.x - vp.x) as i32, (pp.y - vp.y) as i32).into(),
-                self.map.color_epos,
-            )
+            Pixel(((pp.x - vp.x), (pp.y - vp.y)).into(), self.map.color_epos)
         };
         pixels.push(pp);
 
         let pp = {
             let pp = self.player.pos;
             let vp = self.vision.pos;
-            Pixel(
-                ((pp.x - vp.x) as i32, (pp.y - vp.y) as i32).into(),
-                self.player.color,
-            )
+            Pixel(((pp.x - vp.x), (pp.y - vp.y)).into(), self.player.color)
         };
         pixels.push(pp);
         app.ledc.write_pixels(pixels);
@@ -137,7 +131,7 @@ impl Sokoban {
     fn hit_wall<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) -> bool {
         let Position { x, y } = self.player.next_pos(app);
         let overlapping =
-            x <= 0 || y <= 0 || x >= self.map.width as i8 - 1 || y >= self.map.height as i8 - 1;
+            x <= 0 || y <= 0 || x >= self.map.width as i32 - 1 || y >= self.map.height as i32 - 1;
         if overlapping {
             return true;
         }
@@ -159,7 +153,7 @@ impl Sokoban {
     fn update_vision<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         let Position { x, y } = self.vision.next_pos(app);
         let overlapping =
-            x < 0 || y < 0 || x >= self.map.width as i8 - 7 || y >= self.map.height as i8 - 7;
+            x < 0 || y < 0 || x >= self.map.width as i32 - 7 || y >= self.map.height as i32 - 7;
         if overlapping {
             return;
         }
@@ -208,7 +202,7 @@ impl Map {
         for y in 0..height {
             for x in 0..width {
                 if maze[y][x] == 1 {
-                    data[y][x] = Some(Position::new(x as i8, y as i8));
+                    data[y][x] = Some(Position::new(x as i32, y as i32));
                 }
             }
         }

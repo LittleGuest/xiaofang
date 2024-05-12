@@ -1,4 +1,3 @@
-#![allow(unused)]
 use alloc::vec::Vec;
 use cube_rand::CubeRng;
 use embassy_time::Timer;

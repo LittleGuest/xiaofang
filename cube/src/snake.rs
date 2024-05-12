@@ -7,8 +7,8 @@ type Food = Position;
 
 #[derive(Debug)]
 pub struct SnakeGame {
-    width: i8,
-    height: i8,
+    width: i32,
+    height: i32,
     snake: Snake,
     food: Food,
     /// ms

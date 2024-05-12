@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+#![allow(unused)]
 
 use core::mem::MaybeUninit;
 use cube::buzzer::Buzzer;
@@ -9,13 +10,10 @@ use esp_backtrace as _;
 use esp_hal::delay::Delay;
 use esp_hal::gpio::IO;
 use esp_hal::ledc::{channel, timer, LSGlobalClkSource, LowSpeed, LEDC};
-use esp_hal::rng::Rng;
 use esp_hal::spi::master::Spi;
 use esp_hal::spi::SpiMode;
 use esp_hal::timer::TimerGroup;
-use esp_hal::Blocking;
 use esp_hal::{clock::ClockControl, i2c::I2C, peripherals::Peripherals, prelude::*};
-use log::info;
 use mpu6050_dmp::address::Address;
 use mpu6050_dmp::sensor::Mpu6050;
 
@@ -41,7 +39,7 @@ async fn main(spawner: Spawner) {
     let mut delay = Delay::new(&clocks);
     init_heap();
     esp_println::logger::init_logger_from_env();
-    let timer = esp_hal::systimer::SystemTimer::new(peripherals.SYSTIMER).alarm0;
+    let _timer = esp_hal::systimer::SystemTimer::new(peripherals.SYSTIMER).alarm0;
     let tg0 = TimerGroup::new_async(peripherals.TIMG0, &clocks);
     let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
 
@@ -64,7 +62,7 @@ async fn main(spawner: Spawner) {
         .configure(timer::config::Config {
             duty: timer::config::Duty::Duty5Bit,
             clock_source: timer::LSClockSource::APBClk,
-            frequency: 24_u32.kHz(),
+            frequency: 2.kHz(),
         })
         .unwrap();
     // 通道配置:绑定定时器和输出 PWM 信号的 GPIO
@@ -82,18 +80,7 @@ async fn main(spawner: Spawner) {
     // 改变 PWM 信号:输出 PWM 信号来驱动
     channel0.set_duty(0).unwrap();
 
-    let buzzer = Buzzer::new(ledc);
-
-    // loop {
-    // channel0.set_duty(0).unwrap();
-    // delay.delay_ms(2000_u32);
-    // channel0.set_duty(0).unwrap();
-    // delay.delay_ms(2000_u32);
-    // channel0.start_duty_fade(0, 100, 1000).unwrap();
-    // while channel0.is_duty_fade_running() {}
-    // channel0.start_duty_fade(100, 0, 1000).unwrap();
-    // while channel0.is_duty_fade_running() {}
-    // }
+    let buzzer = Buzzer::new(channel0);
 
     let i2c = I2C::new(
         peripherals.I2C0,
@@ -119,25 +106,6 @@ async fn main(spawner: Spawner) {
 
     let rng = esp_hal::rng::Rng::new(peripherals.RNG);
     unsafe { cube::RNG.write(rng) };
-
-    // let mut bytes = [0u8; 32];
-    // let mut flash = FlashStorage::new();
-    // let flash_addr = 0x9100;
-    // info!("Flash size = {}", flash.capacity());
-    //
-    // flash.read(flash_addr, &mut bytes).unwrap();
-    // info!("Read from {:x}:  {:02x?}", flash_addr, &bytes[..32]);
-    // info!("Read from {}:  {:?}", flash_addr, &bytes[..32]);
-    //
-    // bytes[0x00] = bytes[0x00].wrapping_add(1);
-    //
-    // flash.write(flash_addr, &bytes).unwrap();
-    // info!("Written to {:x}: {:02x?}", flash_addr, &bytes[..32]);
-    // info!("Written to {}: {:?}", flash_addr, &bytes[..32]);
-    //
-    // let mut reread_bytes = [0u8; 32];
-    // flash.read(flash_addr, &mut reread_bytes).unwrap();
-    // info!("Read from {:x}:  {:02x?}", flash_addr, &reread_bytes[..32]);
 
     cube::App::new(mpu, ledc, buzzer).run().await;
 }

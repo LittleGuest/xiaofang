@@ -158,7 +158,7 @@ where
             self.write_byte(item.r)?;
             self.write_byte(item.b)?;
         }
-        self.send_data().map_err(|e| Error::Spi(e))
+        self.send_data().map_err(Error::Spi)
     }
 }
 
@@ -183,6 +183,6 @@ where
             self.write_byte(item.b)?;
             self.write_byte(item.a.0)?;
         }
-        self.send_data().map_err(|e| Error::Spi(e))
+        self.send_data().map_err(Error::Spi)
     }
 }

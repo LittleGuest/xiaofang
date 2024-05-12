@@ -3,7 +3,6 @@ use embassy_time::Timer;
 use crate::{App, CubeRng, RNG};
 
 /// 八卦
-#[allow(unused)]
 #[derive(Debug)]
 pub enum BaGua {
     Qian,

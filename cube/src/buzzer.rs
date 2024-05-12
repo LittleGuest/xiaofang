@@ -1,18 +1,33 @@
 use cube_rand::CubeRng;
 use embassy_time::Timer;
-use esp_hal::ledc::LEDC;
+use esp_hal::{
+    gpio::{GpioPin, Output, OutputPin, PushPull},
+    ledc::{
+        channel::{Channel, ChannelIFace, Number},
+        LowSpeed, LEDC,
+    },
+};
+use log::info;
 
 use crate::RNG;
 
 /// 蜂鸣器
 pub struct Buzzer<'d> {
     pub open: bool,
-    pwm: LEDC<'d>,
+    // ledc: LEDC<'d>,
+    channel: Channel<'d, LowSpeed, GpioPin<Output<PushPull>, 8>>,
 }
 
 impl<'d> Buzzer<'d> {
-    pub fn new(pwm: LEDC<'d>) -> Self {
-        Self { open: true, pwm }
+    pub fn new(
+        // ledc: LEDC<'d>,
+        channel: Channel<'d, LowSpeed, GpioPin<Output<PushPull>, 8>>,
+    ) -> Self {
+        Self {
+            open: true,
+            // ledc,
+            channel,
+        }
     }
 
     pub fn open(&mut self) {
@@ -31,27 +46,10 @@ impl<'d> Buzzer<'d> {
             return;
         }
 
-        // let mut channel0 = self.ledc.get_channel(
-        //     channel::Number::Channel0,
-        //     io.pins.gpio8.into_push_pull_output(),
-        // );
-        // channel0
-        //     .configure(channel::config::Config {
-        //         timer: &lstimer0,
-        //         duty_pct: 10,
-        //         pin_config: channel::config::PinConfig::PushPull,
-        //     })
-        //     .unwrap();
-        // 改变 PWM 信号:输出 PWM 信号来驱动
-        // channel0.set_duty(0).unwrap();
-        // channel0.set_duty(0).unwrap();
-        // Timer::after_millis(200).await;
-        // channel0.set_duty(0).unwrap();
-        // Timer::after_millis(200).await;
-        // channel0.start_duty_fade(0, 100, 1000).unwrap();
-        // while channel0.is_duty_fade_running() {}
-        // channel0.start_duty_fade(100, 0, 1000).unwrap();
-        // while channel0.is_duty_fade_running() {}
+        self.channel
+            .start_duty_fade(0, 100, duration as u16)
+            .unwrap();
+        while self.channel.is_duty_fade_running() {}
     }
 
     ///停止发声
@@ -62,7 +60,8 @@ impl<'d> Buzzer<'d> {
     /// 菜单选择音效
     pub async fn menu_select(&mut self) {
         if self.open {
-            self.tone(1500, 100);
+            // self.tone(1500, 100);
+            self.tone(1500, 500);
         }
         Timer::after_millis(200).await;
     }

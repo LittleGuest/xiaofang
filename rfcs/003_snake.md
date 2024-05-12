@@ -5,7 +5,7 @@
 
 [summary]: #summary
 
-用 Rust 设计一款"贪吃蛇"的游戏,运行在 esp32c3 上,显示在 8*8 的 ws2812 点阵上.
+用 Rust 设计一款"贪吃蛇"的游戏,运行在 esp32c3 上,显示在 8\*8 的 ws2812 点阵上.
 
 # Motivation
 
@@ -49,7 +49,6 @@ struct Snake {
 [unresolved-questions]: #unresolved-questions
 
 - 吃掉食物的动画和音效
-- 历史最高分动画,音乐
 - 移动音效,得分音效和画面效果,死亡音效
 
 # Future possibilities
