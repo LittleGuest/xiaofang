@@ -37,19 +37,19 @@ use crate::sokoban::Sokoban;
 #[macro_use]
 extern crate alloc;
 
-mod bagua;
-mod battery;
+pub mod bagua;
+pub mod battery;
 pub mod buzzer;
-mod cube_man;
-mod dice;
-mod face;
+pub mod cube_man;
+pub mod dice;
+pub mod face;
 pub mod ledc;
-mod mapping;
-mod maze;
-mod snake;
-mod sokoban;
-mod timers;
-mod ui;
+pub mod mapping;
+pub mod maze;
+pub mod snake;
+pub mod sokoban;
+pub mod timers;
+pub mod ui;
 
 pub static mut RNG: MaybeUninit<Rng> = MaybeUninit::uninit();
 

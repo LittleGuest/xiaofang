@@ -1,3 +1,5 @@
+#![doc = include_str!("../../rfcs/003_snake.md")]
+
 use alloc::collections::LinkedList;
 use embassy_time::Timer;
 
@@ -18,6 +20,12 @@ pub struct SnakeGame {
     /// 最高分
     pub highest: u8,
     game_over: bool,
+}
+
+impl Default for SnakeGame {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SnakeGame {

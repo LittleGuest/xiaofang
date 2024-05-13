@@ -1,3 +1,5 @@
+#![doc = include_str!("../../rfcs/004_timer.md")]
+
 use alloc::vec::Vec;
 use embassy_time::Timer;
 use embedded_graphics_core::{

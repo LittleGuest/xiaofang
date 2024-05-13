@@ -26,6 +26,12 @@ pub struct Sokoban {
     game_over: bool,
 }
 
+impl Default for Sokoban {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Sokoban {
     pub fn new() -> Self {
         let xsb = "

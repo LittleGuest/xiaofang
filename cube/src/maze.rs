@@ -1,3 +1,5 @@
+#![doc = include_str!("../../rfcs/005_maze.md")]
+
 use alloc::vec::Vec;
 use embassy_time::Timer;
 use embedded_graphics_core::{

@@ -1,3 +1,5 @@
+#![doc = include_str!("../../rfcs/006_cube_man.md")]
+
 use alloc::{collections::VecDeque, vec::Vec};
 use cube_rand::CubeRng;
 use embassy_time::Timer;
@@ -24,6 +26,12 @@ pub struct CubeManGame {
     game_over: bool,
     /// ms
     waiting_time: u64,
+}
+
+impl Default for CubeManGame {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CubeManGame {
