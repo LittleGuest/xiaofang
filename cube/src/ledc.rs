@@ -4,6 +4,7 @@ use esp_hal::{
     spi::{master::Spi, FullDuplexMode},
 };
 use heapless::Vec;
+use log::error;
 use smart_leds_matrix::{
     layout::{invert_axis::NoInvert, Rectangular},
     SmartLedMatrix,
@@ -16,57 +17,38 @@ use crate::mapping;
 const NUM_LEDS: usize = 64;
 
 pub struct LedControl<'d> {
-    /// 最终上传的数据
-    buf: [u8; 8],
-    // gd: Gd,
-    /// 亮度
-    // brightness: u8,
-    ws: Ws2812<Spi<'d, SPI2, FullDuplexMode>>,
-    matrix: SmartLedMatrix<Rectangular<NoInvert>, NUM_LEDS>,
+    matrix: SmartLedMatrix<Ws2812<Spi<'d, SPI2, FullDuplexMode>>, Rectangular<NoInvert>, NUM_LEDS>,
 }
 
 impl<'d> LedControl<'d> {
     pub fn new(spi: Spi<'d, SPI2, FullDuplexMode>) -> Self {
-        let brightness = 10;
-
         let ws = Ws2812::new(spi);
-        let mut matrix = SmartLedMatrix::<_, { 8 * 8 }>::new(Rectangular::new(8, 8));
-        matrix.set_brightness(brightness);
+        let mut matrix = SmartLedMatrix::<_, _, { 8 * 8 }>::new(ws, Rectangular::new(8, 8));
+        matrix.set_brightness(1);
         matrix.clear(Rgb888::new(0, 0, 0)).unwrap();
 
-        Self {
-            buf: [0; 8],
-            // gd: Gd::default(),
-            // brightness,
-            ws,
-            matrix,
-        }
+        Self { matrix }
     }
 
-    pub fn shutdown(&mut self) {
-        // self.led.power_off();
+    pub fn off(&mut self) {
+        self.matrix.set_brightness(0);
     }
 
     // 设置亮度
     pub fn set_brightness(&mut self, b: u8) {
-        self.matrix.set_brightness(b)
+        self.matrix.set_brightness(b);
     }
 
+    /// 清屏
     pub fn clear(&mut self) {
-        for i in 0..self.buf.len() {
-            self.buf[i] = 0;
-        }
-        self.upload();
+        self.write_bytes([0; 8]);
     }
 
+    /// 清屏
     pub fn clear_with_color(&mut self, color: Rgb888) {
         if let Err(e) = self.matrix.clear(color) {
-            log::error!("clear_with_color error {e:?}");
+            error!("clear_with_color error {e:?}");
         }
-    }
-
-    pub fn upload(&mut self) {
-        self.write_bytes(self.buf);
     }
 
     pub fn write_bytes(&mut self, data: [u8; 8]) {
@@ -79,9 +61,7 @@ impl<'d> LedControl<'d> {
                     BinaryColor::Off
                 };
 
-                pixels
-                    .push(Pixel((x, y as i32).into(), on_off.into()))
-                    .unwrap();
+                pixels.push(Pixel((x, y as i32).into(), on_off.into()));
             }
         }
         self.write_pixels(pixels);
@@ -91,9 +71,11 @@ impl<'d> LedControl<'d> {
     where
         I: IntoIterator<Item = Pixel<Rgb888>>,
     {
-        self.matrix.draw_iter(pixels).unwrap();
-        if let Err(e) = self.matrix.flush_with_gamma(&mut self.ws) {
-            log::error!("write_rgb {e:?}");
+        if let Err(e) = self.matrix.draw_iter(pixels) {
+            error!("write pixels error: {e:?}");
+        }
+        if let Err(e) = self.matrix.flush() {
+            error!("write pixels error: {e:?}");
         }
     }
 
@@ -101,6 +83,7 @@ impl<'d> LedControl<'d> {
         self.write_pixels([pixel]);
     }
 
+    /// 绘制分数
     pub fn draw_score(&mut self, score: u8) {
         self.clear();
 

@@ -6,6 +6,15 @@ use core::mem::MaybeUninit;
 use cube::buzzer::Buzzer;
 use cube::ledc::LedControl;
 use embassy_executor::Spawner;
+use embassy_time::Timer;
+use embedded_graphics::draw_target::DrawTarget;
+use embedded_graphics::geometry::{Point, Size};
+use embedded_graphics::pixelcolor::{Rgb888, RgbColor};
+use embedded_graphics::primitives::{
+    Circle, Line, Primitive, PrimitiveStyle, PrimitiveStyleBuilder, Rectangle,
+};
+use embedded_graphics::transform::Transform;
+use embedded_graphics::Drawable;
 use esp_backtrace as _;
 use esp_hal::delay::Delay;
 use esp_hal::gpio::IO;
@@ -16,6 +25,10 @@ use esp_hal::timer::TimerGroup;
 use esp_hal::{clock::ClockControl, i2c::I2C, peripherals::Peripherals, prelude::*};
 use mpu6050_dmp::address::Address;
 use mpu6050_dmp::sensor::Mpu6050;
+use smart_leds::RGB8;
+use smart_leds_matrix::layout::Rectangular;
+use smart_leds_matrix::SmartLedMatrix;
+use ws2812_spi::Ws2812;
 
 extern crate alloc;
 
