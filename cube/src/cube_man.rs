@@ -1,6 +1,3 @@
-//! 是方块人就下一百层
-//!
-
 use alloc::{collections::VecDeque, vec::Vec};
 use cube_rand::CubeRng;
 use embassy_time::Timer;
@@ -15,6 +12,7 @@ use log::{debug, info};
 
 use crate::{App, Gd, Position, RNG};
 
+/// 是方块人就下一百层
 #[derive(Debug)]
 pub struct CubeManGame {
     man: CubeMan,

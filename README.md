@@ -28,5 +28,4 @@
 
 ## 三方库
 
-- https://github.com/smart-leds-rs/smart-leds-matrix.git,修改了部分源码
 - https://github.com/smart-leds-rs/ws2812-spi-rs,修改了部分源码

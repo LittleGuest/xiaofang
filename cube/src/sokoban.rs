@@ -1,16 +1,21 @@
+#![doc = include_str!("../../rfcs/007_sokoban.md")]
+
 use alloc::vec::Vec;
 use embassy_time::Timer;
+use embedded_graphics::{geometry::Point, pixelcolor::PixelColor};
 use embedded_graphics_core::{
     pixelcolor::{BinaryColor, Rgb888},
     prelude::{RgbColor, WebColors},
     Pixel,
 };
+use log::{debug, info};
 
-use crate::{App, CubeRng, Gd, Position, RNG};
+use crate::{App, CubeRng, Gd, RNG};
 
-/// 迷宫
+/// 推箱子
 /// 左上角为坐标原点,所有的坐标都为全局坐标
-/// 如果地图大小大于8*8,led是显示不完整的,就要添加一个视野的效果,地图的内容根据视野来加载
+/// 如果地图大小大于8*8,led是显示不完整的,就要添加一个视野的效果
+/// 地图的内容根据视野来加载
 #[derive(Debug)]
 pub struct Sokoban {
     map: Map,
@@ -22,25 +27,37 @@ pub struct Sokoban {
 }
 
 impl Sokoban {
-    pub fn new(width: usize, height: usize) -> Self {
-        let map = Map::new(width, height);
-        // 随机玩家坐标
-        let pp = loop {
-            let pp = Position::random_range_usize(1..width, 1..height);
-            let md = map.data[pp.x as usize][pp.y as usize];
-            if md.is_none() {
-                break pp;
-            }
-        };
-        let player = Player::new(pp);
+    pub fn new() -> Self {
+        let xsb = "
+----#####----------
+----#---#----------
+----#$--#----------
+--###--$##---------
+--#--$-$-#---------
+###-#-##-#---######
+#---#-##-#####--..#
+#-$--$----------..#
+#####-###-#@##--..#
+----#-----#########
+----#######--------
+";
+        let map = Map::from_xsb(xsb);
+        debug!("sokoban: {map}");
+        let pp = map
+            .data
+            .iter()
+            .flatten()
+            .filter(|m| m.is_some())
+            .cloned()
+            .find(|m| m.unwrap().0 == TargetType::Man);
+        let player = Player::new(pp.unwrap().unwrap().1 .0);
 
         // 设置一个初始视野坐标
         let vpx = {
             if player.pos.x - 3 <= 0 {
                 0
-            } else if player.pos.x + 5 >= width as i32 {
-                // W as i8 - 8 + (W as i8 - player.pos.x) - 1
-                player.pos.x - 8 + width as i32 - player.pos.x
+            } else if player.pos.x + 5 >= map.width as i32 {
+                player.pos.x - 8 + map.width as i32 - player.pos.x
             } else {
                 player.pos.x - 3
             }
@@ -48,9 +65,8 @@ impl Sokoban {
         let vpy = {
             if player.pos.y - 3 <= 0 {
                 0
-            } else if player.pos.y + 5 >= height as i32 {
-                // H as i8 - 8 + (H as i8 - player.pos.y) - 1
-                player.pos.y - 8 + height as i32 - player.pos.y
+            } else if player.pos.y + 5 >= map.height as i32 {
+                player.pos.y - 8 + map.height as i32 - player.pos.y
             } else {
                 player.pos.y - 3
             }
@@ -59,14 +75,12 @@ impl Sokoban {
         let mut maze = Sokoban {
             map,
             player,
-            vision: Vision::new(Position::new(vpx, vpy)),
+            vision: Vision::new(Point::new(vpx, vpy)),
             waiting_time: 300,
             game_over: false,
         };
 
         maze.copy_map_to_vision();
-        maze.map.spos = player.pos;
-        maze.map.cal_epos();
 
         maze
     }
@@ -88,10 +102,10 @@ impl Sokoban {
                 // 玩家移动之后视野数据改变
                 self.update_vision(app);
 
-                // 游戏结束
-                if self.player.pos.x == self.map.epos.x && self.player.pos.y == self.map.epos.y {
-                    self.game_over = true;
-                }
+                // TODO: 游戏结束条件是所有箱子都在目标点上
+                // if self.player.pos.x == self.map.epos.x && self.player.pos.y == self.map.epos.y {
+                self.game_over = true;
+                // }
             }
             self.draw(app);
 
@@ -105,19 +119,12 @@ impl Sokoban {
         // 将地图坐标转换为led坐标
         for y in 0..8 {
             for x in 0..8 {
-                if self.vision.data[y][x].is_some() {
-                    pixels.push(Pixel((x as i32, y as i32).into(), self.map.color));
+                if let Some(d) = self.vision.data[y][x] {
+                    pixels.push(Pixel((x as i32, y as i32).into(), d.1 .1));
                 }
             }
         }
-
-        let pp = {
-            let pp = self.map.epos;
-            let vp = self.vision.pos;
-            Pixel(((pp.x - vp.x), (pp.y - vp.y)).into(), self.map.color_epos)
-        };
-        pixels.push(pp);
-
+        // 人物
         let pp = {
             let pp = self.player.pos;
             let vp = self.vision.pos;
@@ -129,7 +136,7 @@ impl Sokoban {
 
     /// 检测是否撞墙
     fn hit_wall<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) -> bool {
-        let Position { x, y } = self.player.next_pos(app);
+        let Point { x, y } = self.player.next_pos(app);
         let overlapping =
             x <= 0 || y <= 0 || x >= self.map.width as i32 - 1 || y >= self.map.height as i32 - 1;
         if overlapping {
@@ -141,7 +148,7 @@ impl Sokoban {
 
     /// 将对应的地图数据复制给视野
     fn copy_map_to_vision(&mut self) {
-        let Position { x, y } = self.vision.pos;
+        let Point { x, y } = self.vision.pos;
         for (iy, y) in (y..(y + 8)).enumerate() {
             for (ix, x) in (x..(x + 8)).enumerate() {
                 self.vision.data[iy][ix] = self.map.data[y as usize][x as usize];
@@ -151,7 +158,7 @@ impl Sokoban {
 
     /// 改变视野位置
     fn update_vision<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
-        let Position { x, y } = self.vision.next_pos(app);
+        let Point { x, y } = self.vision.next_pos(app);
         let overlapping =
             x < 0 || y < 0 || x >= self.map.width as i32 - 7 || y >= self.map.height as i32 - 7;
         if overlapping {
@@ -163,6 +170,27 @@ impl Sokoban {
     }
 }
 
+/// 标记地图中的类型,表示墙,人还是目标点
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum TargetType {
+    /// 人
+    Man,
+    /// 人在目标点上
+    ManOnGoal,
+    /// 箱子
+    Box,
+    /// 箱子在目标点上
+    BoxOnGoal,
+    /// 墙
+    Wall,
+    /// 目标点
+    Goal,
+    /// 地板
+    Floor,
+}
+
+type MapCell = (TargetType, Pixel<Rgb888>);
+
 /// 迷宫地图
 #[derive(Debug)]
 struct Map {
@@ -171,72 +199,82 @@ struct Map {
     /// 长度
     height: usize,
     /// 地图数据
-    data: Vec<Vec<Option<Position>>>,
-    /// 地图颜色
-    color: Rgb888,
-    /// 起点
-    spos: Position,
-    /// 终点
-    epos: Position,
-    /// 终点颜色
-    color_epos: Rgb888,
+    data: Vec<Vec<Option<MapCell>>>,
+}
+
+impl core::fmt::Display for Map {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "whidth: {}, height: {}", self.width, self.height);
+        for y in self.data.iter() {
+            for x in y.iter() {
+                if let Some((tt, x)) = x {
+                    match tt {
+                        TargetType::Man => write!(f, "@"),
+                        TargetType::ManOnGoal => write!(f, "+"),
+                        TargetType::Box => write!(f, "$"),
+                        TargetType::BoxOnGoal => write!(f, "*"),
+                        TargetType::Wall => write!(f, "#"),
+                        TargetType::Goal => write!(f, "."),
+                        TargetType::Floor => write!(f, "-"),
+                    };
+                } else {
+                    write!(f, "-");
+                }
+            }
+            writeln!(f);
+        }
+        Ok(())
+    }
 }
 
 impl Map {
-    fn new(width: usize, height: usize) -> Self {
-        // 使用地图生成算法生成地图 TODO: 迷宫大小,使用的算法都随机
-        let mut data = Vec::<Vec<Option<Position>>>::with_capacity(height);
-        for _ in 0..height {
-            let mut tmp = Vec::<Option<Position>>::with_capacity(width);
-            for _ in 0..width {
-                tmp.push(None);
+    /// TODO: 使用算法生成
+    fn new() -> Self {
+        unimplemented!()
+    }
+
+    /// 根据XSB生成地图
+    fn from_xsb(xsb: &str) -> Self {
+        let mut width = 1;
+        let mut height = 1;
+        let mut data = Vec::<Vec<Option<(TargetType, Pixel<Rgb888>)>>>::new();
+        for (y, line) in xsb.lines().enumerate() {
+            height = y;
+            let y = y as i32;
+            let mut tmp = Vec::<Option<(TargetType, Pixel<Rgb888>)>>::new();
+            for (x, char) in line.chars().enumerate() {
+                width = x;
+                let x = x as i32;
+                let pos = match char {
+                    '@' => Some((TargetType::Man, Pixel((x, y).into(), Rgb888::CSS_RED))),
+                    '+' => Some((
+                        TargetType::ManOnGoal,
+                        Pixel((x, y).into(), Rgb888::CSS_YELLOW),
+                    )),
+                    '$' => Some((TargetType::Box, Pixel((x, y).into(), Rgb888::CSS_BROWN))),
+                    '*' => Some((
+                        TargetType::BoxOnGoal,
+                        Pixel((x, y).into(), Rgb888::CSS_DARK_SLATE_GRAY),
+                    )),
+                    '#' => Some((TargetType::Wall, Pixel((x, y).into(), Rgb888::CSS_WHITE))),
+                    '.' => Some((TargetType::Goal, Pixel((x, y).into(), Rgb888::CSS_GREEN))),
+                    _ => None,
+                };
+                tmp.push(pos);
             }
             data.push(tmp);
-        }
-
-        let maze = maze::Maze::new(width, height)
-            .unwrap()
-            .generate(&mut unsafe { CubeRng(RNG.assume_init_mut().random() as u64) });
-        log::info!("\n{maze}\n");
-
-        for y in 0..height {
-            for x in 0..width {
-                if maze[y][x] == 1 {
-                    data[y][x] = Some(Position::new(x as i32, y as i32));
-                }
-            }
         }
 
         Self {
             width,
             height,
             data,
-            color: Rgb888::WHITE,
-            spos: Position::default(),
-            epos: Position::default(),
-            color_epos: Rgb888::CSS_LIGHT_GREEN,
         }
     }
 
-    /// 计算结束位置
-    fn cal_epos(&mut self) {
-        let pos = loop {
-            let x = unsafe {
-                CubeRng(RNG.assume_init_mut().random() as u64).random_range(0..self.width - 1)
-            };
-
-            let y = unsafe {
-                CubeRng(RNG.assume_init_mut().random() as u64).random_range(0..self.height - 1)
-            };
-
-            if self.data[y][x].is_some() || (self.spos.x as usize == x && self.spos.y as usize == y)
-            {
-                continue;
-            }
-
-            break (x, y);
-        };
-        self.epos = pos.into();
+    /// TODO: 根据LURD生成地图
+    fn from_lurd(lurd: &str) -> Self {
+        unimplemented!()
     }
 }
 
@@ -244,30 +282,20 @@ impl Map {
 #[derive(Debug)]
 struct Vision {
     /// 视野左上角坐标
-    pos: Position,
+    pos: Point,
     /// 视野数据
-    data: [[Option<Position>; 8]; 8],
-}
-
-impl core::fmt::Display for Vision {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        writeln!(f, "{:?}", self.pos)?;
-        for y in 0..8 {
-            writeln!(f, "{:?}", self.data[y])?;
-        }
-        Ok(())
-    }
+    data: [[Option<MapCell>; 8]; 8],
 }
 
 impl Vision {
-    fn new(pos: Position) -> Self {
+    fn new(pos: Point) -> Self {
         Self {
             pos,
             data: [[None; 8]; 8],
         }
     }
 
-    fn next_pos<T: esp_hal::i2c::Instance>(&self, app: &mut App<T>) -> Position {
+    fn next_pos<T: esp_hal::i2c::Instance>(&self, app: &mut App<T>) -> Point {
         let mut pos = self.pos;
         match app.gd {
             Gd::None => {}
@@ -287,21 +315,19 @@ impl Vision {
 /// 玩家
 #[derive(Debug, Clone, Copy)]
 struct Player {
-    pos: Position,
-    old_pos: Position,
+    pos: Point,
     color: Rgb888,
 }
 
 impl Player {
-    fn new(pos: Position) -> Self {
+    fn new(pos: Point) -> Self {
         Self {
             pos,
-            old_pos: pos,
-            color: Rgb888::CSS_ORANGE_RED,
+            color: Rgb888::CSS_RED,
         }
     }
 
-    fn next_pos<T: esp_hal::i2c::Instance>(&self, app: &mut App<T>) -> Position {
+    fn next_pos<T: esp_hal::i2c::Instance>(&self, app: &mut App<T>) -> Point {
         let mut pos = self.pos;
         match app.gd {
             Gd::None => {}
@@ -314,7 +340,6 @@ impl Player {
     }
 
     fn r#move<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
-        self.old_pos = self.pos;
         self.pos = self.next_pos(app);
     }
 }

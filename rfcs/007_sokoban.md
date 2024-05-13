@@ -5,7 +5,7 @@
 
 [summary]: #summary
 
-用 Rust 设计一款"推箱子"的游戏,运行在 esp32c3 上,显示在 8*8 的 ws2812 点阵上.
+用 Rust 设计一款"推箱子"的游戏,运行在 esp32c3 上,显示在 8\*8 的 ws2812 点阵上.
 
 # Motivation
 
@@ -21,17 +21,17 @@ Rust,esp32c3 嵌入式学习,ws2812 的使用.
 
 推箱子关卡一般用 XSB 格式来保存和交流,解答步骤则使用LURD格式.
 
-### XSB
+### XSB格式简介
 
-| 字符 | 含义 |
-| ---- | ---- |
-| @    | 人(man)   |
-| +    | 人在目标点(man on goal)   |
-| $    | 箱子(box)   |
-| *    | 箱子在目标点上(box on goal)   |
-| #    | 墙(wall)   |
-| .    | 目标点(goal)   |
-| -    | XSB格式空格代表"地板",又因为连续多个空格在网页或即时通讯软件中偶尔显示有问题,也用"-"或"_"代替空格   |
+| 字符 | 含义                                                                                                |
+| ---- | --------------------------------------------------------------------------------------------------- |
+| @    | 人(man)                                                                                             |
+| +    | 人在目标点(man on goal)                                                                             |
+| $    | 箱子(box)                                                                                           |
+| \*   | 箱子在目标点上(box on goal)                                                                         |
+| #    | 墙(wall)                                                                                            |
+| .    | 目标点(goal)                                                                                        |
+| -    | XSB格式空格代表"地板",又因为连续多个空格在网页 或即时通讯软件中偶尔显示有问题,也用"-"或"\_"代替空格 |
 
 #### 例子
 
@@ -85,9 +85,11 @@ lllllllulldRRRRRRRRRRRRRuRDldR
 
 ## 游戏设计
 
-- 白色表示墙
 - 红色表示玩家
+- 黄色表示玩家在目标点上
 - 棕色表示箱子
+- 墨绿色表示箱子在目标点上
+- 白色表示墙
 - 绿色表示目标点
 - 地板没有颜色
 
@@ -102,15 +104,7 @@ struct Map {
     /// 长度
     height: usize,
     /// 地图数据
-    data: Vec<Vec<Option<Position>>>,
-    /// 地图颜色
-    color: Rgb888,
-    /// 起点
-    spos: Position,
-    /// 终点
-    epos: Position,
-    /// 终点颜色
-    color_epos: Rgb888,
+    data: Vec<Vec<Option<Pixel<Rgb888>>>>,
 }
 ```
 
@@ -135,21 +129,11 @@ enum Type{
 
 标记地图中的类型,表示墙,人还是目标点.从XSB生成地图
 
-# Drawbacks
-
-[drawbacks]: #drawbacks
-
-为什么不能这样做?
-
 # Unresolved questions
 
 [unresolved-questions]: #unresolved-questions
 
-尚未解决的问题
-
-- 在合并之前，您希望通过 RFC 程序解决设计中的哪些部分？
-- 您希望在稳定之前通过实施该功能解决设计中的哪些部分？
-- 您认为哪些相关问题超出了本 RFC 的范围，可以在未来独立于本 RFC 提出的解决方案加以解决？
+- 游戏音乐
 
 # Future possibilities
 

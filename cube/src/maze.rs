@@ -24,7 +24,7 @@ pub struct Maze {
 impl Maze {
     pub fn new(width: usize, height: usize) -> Self {
         let map = MazeMap::new(width, height);
-        // 随机玩家坐标
+        // FIXME: 随机玩家坐标,这里可能导致起始位置较近，后续使用路径算法生成
         let pp = loop {
             let pp = Position::random_range_usize(1..width, 1..height);
             let md = map.data[pp.x as usize][pp.y as usize];
@@ -39,7 +39,6 @@ impl Maze {
             if player.pos.x - 3 <= 0 {
                 0
             } else if player.pos.x + 5 >= width as i32 {
-                // W as i8 - 8 + (W as i8 - player.pos.x) - 1
                 player.pos.x - 8 + width as i32 - player.pos.x
             } else {
                 player.pos.x - 3
@@ -49,7 +48,6 @@ impl Maze {
             if player.pos.y - 3 <= 0 {
                 0
             } else if player.pos.y + 5 >= height as i32 {
-                // H as i8 - 8 + (H as i8 - player.pos.y) - 1
                 player.pos.y - 8 + height as i32 - player.pos.y
             } else {
                 player.pos.y - 3

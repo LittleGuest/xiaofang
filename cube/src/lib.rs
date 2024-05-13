@@ -32,6 +32,8 @@ use snake::SnakeGame;
 use timers::Timers;
 use ui::Ui;
 
+use crate::sokoban::Sokoban;
+
 #[macro_use]
 extern crate alloc;
 
@@ -48,12 +50,6 @@ mod snake;
 mod sokoban;
 mod timers;
 mod ui;
-
-// lazy_static::lazy_static! {
-// static ref App:App<'d>={};
-// static ref LC: LEDC<'d>={};
-// pub static ref Io:IO=IO::new(gpio, io_mux);
-// }
 
 pub static mut RNG: MaybeUninit<Rng> = MaybeUninit::uninit();
 
@@ -148,13 +144,6 @@ impl From<&Position> for Pixel<Rgb888> {
     }
 }
 
-// impl FromIterator<Position> for Iterator<Item = Pixel<Rgb888>> {}
-// impl From<Vec<Position>> for Vec<Pixel<Rgb888>> {
-//     fn from(value: Vec<Position>) -> Self {
-//         todo!()
-//     }
-// }
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Direction {
     Up,
@@ -235,34 +224,27 @@ where
         let ax = accel.x();
         let ay = accel.y();
 
-        // let ax_abs = ax.abs();
-        // let ay_abs = ay.abs();
         let ax_abs = if ax <= 0.0 { 0.0 - ax } else { ax };
         let ay_abs = if ay <= 0.0 { 0.0 - ay } else { ay };
         if ax_abs > 0.5 || ay_abs > 0.5 {
             if ax_abs > ay_abs {
                 if ax < -0.5 {
-                    // self.ledc.gd = Gd::Right;
                     self.gd = Gd::Right;
                 }
                 if ax > 0.5 {
-                    // self.ledc.gd = Gd::Left;
                     self.gd = Gd::Left;
                 }
             }
 
             if ax_abs < ay_abs {
                 if ay < -0.5 {
-                    // self.ledc.gd = Gd::Up;
                     self.gd = Gd::Up;
                 }
                 if ay > 0.5 {
-                    // self.ledc.gd = Gd::Down;
                     self.gd = Gd::Down;
                 }
             }
         } else {
-            // self.ledc.gd = Gd::None;
             self.gd = Gd::None;
         }
     }
@@ -345,7 +327,9 @@ where
                         flash_data[0x01] = cm.highest;
                         flash.write(flash_addr, &flash_data).ok();
                     }
-                    Ui::Sokoban => {}
+                    Ui::Sokoban => {
+                        Sokoban::new().run(&mut self).await;
+                    }
                     Ui::Sound => {}
                 },
                 Gd::Right => {
