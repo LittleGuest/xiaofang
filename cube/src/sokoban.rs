@@ -34,24 +34,24 @@ impl Default for Sokoban {
 
 impl Sokoban {
     pub fn new() -> Self {
-        let xsb = "----#####----------
-----#---#----------
-----#$--#----------
---###--$##---------
---#--$-$-#---------
-###-#-##-#---######
-#---#-##-#####--..#
-#-$--$----------..#
-#####-###-#@##--..#
-----#-----#########
-----#######--------
+        let xsb = "
+#######
+#--#--#
+#-$---#
+#--*.*#
+#-$@*-#
+###$*-#
+-#--*-#
+-#-#.-#
+-#--.-#
+-######
 ";
         let map = Map::from_xsb(xsb);
         let player = Player::new(map.player.1 .0);
 
         // 设置一个初始视野坐标
         let vpx = {
-            if player.pos.x - 3 <= 0 {
+            if player.pos.x - 3 <= 0 || map.width < 8 {
                 0
             } else if player.pos.x + 5 >= map.width as i32 {
                 player.pos.x - 8 + map.width as i32 - player.pos.x
@@ -60,7 +60,7 @@ impl Sokoban {
             }
         };
         let vpy = {
-            if player.pos.y - 3 <= 0 {
+            if player.pos.y - 3 <= 0 || map.height < 8 {
                 0
             } else if player.pos.y + 5 >= map.height as i32 {
                 player.pos.y - 8 + map.height as i32 - player.pos.y
@@ -130,12 +130,6 @@ impl Sokoban {
                     Gd::Down => boxp.y += 1,
                     Gd::Left => boxp.x -= 1,
                 };
-                // let mc = boxs.iter().find(|m| {
-                //     info!("next mc :{m:?}");
-                //     matches!(m.0, TargetType::Box | TargetType::Wall)
-                //         && m.1 .0.x == boxp.x
-                //         && m.1 .0.y == boxp.y
-                // });
                 let is_box = boxs.iter().any(|m| {
                     matches!(m.0, TargetType::Box) && m.1 .0.x == boxp.x && m.1 .0.y == boxp.y
                 });
@@ -225,9 +219,29 @@ impl Sokoban {
     /// 将对应的地图数据复制给视野
     fn copy_map_to_vision(&mut self) {
         let Point { x, y } = self.vision.pos;
-        for (iy, y) in (y..(y + 8)).enumerate() {
-            for (ix, x) in (x..(x + 8)).enumerate() {
-                self.vision.data[iy][ix] = self.map.data[y as usize][x as usize];
+        if self.map.width < 8 && self.map.height < 8 {
+            for (iy, y) in (y..self.map.height as i32).enumerate() {
+                for (ix, x) in (x..self.map.width as i32).enumerate() {
+                    self.vision.data[iy][ix] = self.map.data[y as usize][x as usize];
+                }
+            }
+        } else if self.map.width < 8 {
+            for (iy, y) in (y..(y + 8)).enumerate() {
+                for (ix, x) in (x..self.map.width as i32).enumerate() {
+                    self.vision.data[iy][ix] = self.map.data[y as usize][x as usize];
+                }
+            }
+        } else if self.map.height < 8 {
+            for (iy, y) in (y..self.map.height as i32).enumerate() {
+                for (ix, x) in (x..(x + 8)).enumerate() {
+                    self.vision.data[iy][ix] = self.map.data[y as usize][x as usize];
+                }
+            }
+        } else {
+            for (iy, y) in (y..(y + 8)).enumerate() {
+                for (ix, x) in (x..(x + 8)).enumerate() {
+                    self.vision.data[iy][ix] = self.map.data[y as usize][x as usize];
+                }
             }
         }
     }
@@ -235,8 +249,17 @@ impl Sokoban {
     /// 改变视野位置
     fn update_vision<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         let Point { x, y } = self.vision.next_pos(app);
-        let overlapping =
-            x < 0 || y < 0 || x >= self.map.width as i32 - 7 || y >= self.map.height as i32 - 7;
+        let overlapping = {
+            if self.map.width < 8 && self.map.height < 8 {
+                true
+            } else if self.map.width < 8 {
+                x < 0 || y < 0 || x > self.map.width as i32 - 7 || y >= self.map.height as i32 - 7
+            } else if self.map.height < 8 {
+                x < 0 || y < 0 || x >= self.map.width as i32 - 7 || y > self.map.height as i32 - 7
+            } else {
+                x < 0 || y < 0 || x >= self.map.width as i32 - 7 || y >= self.map.height as i32 - 7
+            }
+        };
         if overlapping {
             return;
         }
@@ -251,12 +274,8 @@ impl Sokoban {
 enum TargetType {
     /// 人
     Man,
-    /// 人在目标点上
-    ManOnGoal,
     /// 箱子
     Box,
-    /// 箱子在目标点上
-    BoxOnGoal,
     /// 墙
     Wall,
     /// 目标点
@@ -294,12 +313,10 @@ impl Map {
     /// 根据XSB生成地图
     fn from_xsb(xsb: &str) -> Self {
         let mut map = Self::default();
-        for (y, line) in xsb.lines().enumerate() {
-            map.height = y;
+        for (y, line) in xsb.trim().lines().enumerate() {
             let y = y as i32;
             let mut tmp = Vec::<Option<(TargetType, Pixel<Rgb888>)>>::new();
             for (x, char) in line.chars().enumerate() {
-                map.width = x;
                 let x = x as i32;
                 let pos = match char {
                     '@' => {
@@ -336,8 +353,15 @@ impl Map {
             }
             map.data.push(tmp);
         }
-        map.width += 1;
-        map.height += 1;
+
+        map.data.extract_if(|d| d.iter().all(|c| c.is_none()));
+
+        map.height = map.data.len();
+        map.width = if map.height == 0 {
+            0
+        } else {
+            map.data[0].len()
+        };
         map
     }
 

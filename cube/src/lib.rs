@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 #![feature(slice_flatten)]
+#![feature(extract_if)]
 #![allow(unused)]
 
 use core::{mem::MaybeUninit, ops::RangeBounds};

@@ -38,7 +38,7 @@ impl Maze {
 
         // 设置一个初始视野坐标
         let vpx = {
-            if player.pos.x - 3 <= 0 {
+            if player.pos.x - 3 <= 0 || width < 8 {
                 0
             } else if player.pos.x + 5 >= width as i32 {
                 player.pos.x - 8 + width as i32 - player.pos.x
@@ -47,7 +47,7 @@ impl Maze {
             }
         };
         let vpy = {
-            if player.pos.y - 3 <= 0 {
+            if player.pos.y - 3 <= 0 || height < 8 {
                 0
             } else if player.pos.y + 5 >= height as i32 {
                 player.pos.y - 8 + height as i32 - player.pos.y
@@ -142,9 +142,29 @@ impl Maze {
     /// 将对应的地图数据复制给视野
     fn copy_map_to_vision(&mut self) {
         let Position { x, y } = self.vision.pos;
-        for (iy, y) in (y..(y + 8)).enumerate() {
-            for (ix, x) in (x..(x + 8)).enumerate() {
-                self.vision.data[iy][ix] = self.map.data[y as usize][x as usize];
+        if self.map.width < 8 && self.map.height < 8 {
+            for (iy, y) in (y..self.map.height as i32).enumerate() {
+                for (ix, x) in (x..self.map.width as i32).enumerate() {
+                    self.vision.data[iy][ix] = self.map.data[y as usize][x as usize];
+                }
+            }
+        } else if self.map.width < 8 {
+            for (iy, y) in (y..(y + 8)).enumerate() {
+                for (ix, x) in (x..self.map.width as i32).enumerate() {
+                    self.vision.data[iy][ix] = self.map.data[y as usize][x as usize];
+                }
+            }
+        } else if self.map.height < 8 {
+            for (iy, y) in (y..self.map.height as i32).enumerate() {
+                for (ix, x) in (x..(x + 8)).enumerate() {
+                    self.vision.data[iy][ix] = self.map.data[y as usize][x as usize];
+                }
+            }
+        } else {
+            for (iy, y) in (y..(y + 8)).enumerate() {
+                for (ix, x) in (x..(x + 8)).enumerate() {
+                    self.vision.data[iy][ix] = self.map.data[y as usize][x as usize];
+                }
             }
         }
     }
@@ -152,8 +172,17 @@ impl Maze {
     /// 改变视野位置
     fn update_vision<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         let Position { x, y } = self.vision.next_pos(app);
-        let overlapping =
-            x < 0 || y < 0 || x >= self.map.width as i32 - 7 || y >= self.map.height as i32 - 7;
+        let overlapping = {
+            if self.map.width < 8 && self.map.height < 8 {
+                true
+            } else if self.map.width < 8 {
+                x < 0 || y < 0 || x > self.map.width as i32 - 7 || y >= self.map.height as i32 - 7
+            } else if self.map.height < 8 {
+                x < 0 || y < 0 || x >= self.map.width as i32 - 7 || y > self.map.height as i32 - 7
+            } else {
+                x < 0 || y < 0 || x >= self.map.width as i32 - 7 || y >= self.map.height as i32 - 7
+            }
+        };
         if overlapping {
             return;
         }
