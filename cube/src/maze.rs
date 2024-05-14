@@ -76,6 +76,8 @@ impl Maze {
         app.gd = Gd::default();
 
         loop {
+            Timer::after_millis(self.waiting_time).await;
+
             if self.game_over {
                 // TODO: 结束动画和音乐
                 Timer::after_millis(3000).await;
@@ -94,8 +96,6 @@ impl Maze {
                 }
             }
             self.draw(app);
-
-            Timer::after_millis(self.waiting_time).await;
         }
     }
 

@@ -87,6 +87,8 @@ impl Sokoban {
         app.gd = Gd::default();
 
         loop {
+            Timer::after_millis(self.waiting_time).await;
+
             if self.game_over {
                 // TODO: 结束进入下一关
                 Timer::after_millis(1500).await;
@@ -109,8 +111,6 @@ impl Sokoban {
                 self.game_over();
             }
             self.draw(app);
-
-            Timer::after_millis(self.waiting_time).await;
         }
     }
 
@@ -178,18 +178,29 @@ impl Sokoban {
             }
         }
 
-        // 箱子
         let vp = self.vision.pos;
+        let goals = self.map.goals.iter().map(|m| m.1 .0).collect::<Vec<_>>();
+        // 箱子
         for b in self.map.boxs.iter().map(|b| b.1) {
-            let pp = Pixel(((b.0.x - vp.x), (b.0.y - vp.y)).into(), b.1);
+            // 青色表示箱子在目标点上
+            let color = if goals.contains(&b.0) {
+                Rgb888::CSS_CYAN
+            } else {
+                b.1
+            };
+            let pp = Pixel(((b.0.x - vp.x), (b.0.y - vp.y)).into(), color);
             pixels.push(pp);
         }
-
         // 人物
         let pp = {
             let pp = self.player.pos;
-            let vp = self.vision.pos;
-            Pixel(((pp.x - vp.x), (pp.y - vp.y)).into(), self.player.color)
+            // 黄色表示玩家在目标点上
+            let color = if goals.contains(&pp) {
+                Rgb888::CSS_YELLOW
+            } else {
+                self.player.color
+            };
+            Pixel(((pp.x - vp.x), (pp.y - vp.y)).into(), color)
         };
         pixels.push(pp);
         app.ledc.write_pixels(pixels);
@@ -295,19 +306,24 @@ impl Map {
                         map.player = (TargetType::Man, Pixel((x, y).into(), Rgb888::CSS_RED));
                         None
                     }
-                    // '+' => Some((
-                    //     TargetType::ManOnGoal,
-                    //     Pixel((x, y).into(), Rgb888::CSS_YELLOW),
-                    // )),
+                    '+' => {
+                        map.player = (TargetType::Man, Pixel((x, y).into(), Rgb888::CSS_RED));
+                        let goal = (TargetType::Goal, Pixel((x, y).into(), Rgb888::CSS_GREEN));
+                        map.goals.push(goal);
+                        None
+                    }
                     '$' => {
                         map.boxs
                             .push((TargetType::Box, Pixel((x, y).into(), Rgb888::CSS_BLUE)));
                         None
                     }
-                    // '*' => Some((
-                    //     TargetType::BoxOnGoal,
-                    //     Pixel((x, y).into(), Rgb888::CSS_CYAN),
-                    // )),
+                    '*' => {
+                        map.boxs
+                            .push((TargetType::Box, Pixel((x, y).into(), Rgb888::CSS_BLUE)));
+                        let goal = (TargetType::Goal, Pixel((x, y).into(), Rgb888::CSS_GREEN));
+                        map.goals.push(goal);
+                        None
+                    }
                     '#' => Some((TargetType::Wall, Pixel((x, y).into(), Rgb888::CSS_WHITE))),
                     '.' => {
                         let goal = (TargetType::Goal, Pixel((x, y).into(), Rgb888::CSS_GREEN));

@@ -50,6 +50,8 @@ impl SnakeGame {
         app.gd = Gd::default();
 
         loop {
+            Timer::after_millis(self.waiting_time).await;
+
             if self.game_over {
                 app.ledc.draw_score(self.score);
                 Timer::after_millis(1500).await;
@@ -66,7 +68,6 @@ impl SnakeGame {
             self.r#move(&app.gd);
             // TODO: 移动音效,得分音效和画面效果,死亡音效
             self.draw(app);
-            Timer::after_millis(self.waiting_time).await;
         }
     }
 
