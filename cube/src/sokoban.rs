@@ -34,8 +34,7 @@ impl Default for Sokoban {
 
 impl Sokoban {
     pub fn new() -> Self {
-        let xsb = "
-----#####----------
+        let xsb = "----#####----------
 ----#---#----------
 ----#$--#----------
 --###--$##---------
@@ -48,15 +47,7 @@ impl Sokoban {
 ----#######--------
 ";
         let map = Map::from_xsb(xsb);
-        debug!("sokoban: {map}");
-        let pp = map
-            .data
-            .iter()
-            .flatten()
-            .filter(|m| m.is_some())
-            .cloned()
-            .find(|m| m.unwrap().0 == TargetType::Man);
-        let player = Player::new(pp.unwrap().unwrap().1 .0);
+        let player = Player::new(map.player.1 .0);
 
         // 设置一个初始视野坐标
         let vpx = {
@@ -97,26 +88,82 @@ impl Sokoban {
 
         loop {
             if self.game_over {
-                // TODO: 结束动画和音乐
-                Timer::after_millis(3000).await;
+                // TODO: 结束进入下一关
+                Timer::after_millis(1500).await;
+                app.face
+                    .break_record_animate(&mut app.ledc, &mut app.buzzer)
+                    .await;
+                Timer::after_millis(500).await;
                 break;
             }
             app.gravity_direction();
 
             if !self.hit_wall(app) {
-                self.player.r#move(app);
+                // 不撞墙，是否在推动箱子，能否推动箱子，能一起移动
+                let can_push = self.push_box(app);
+                if can_push {
+                    self.player.r#move(app);
+                }
                 // 玩家移动之后视野数据改变
                 self.update_vision(app);
-
-                // TODO: 游戏结束条件是所有箱子都在目标点上
-                // if self.player.pos.x == self.map.epos.x && self.player.pos.y == self.map.epos.y {
-                self.game_over = true;
-                // }
+                self.game_over();
             }
             self.draw(app);
 
             Timer::after_millis(self.waiting_time).await;
         }
+    }
+
+    /// 推动箱子
+    fn push_box<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) -> bool {
+        let Point { x, y } = self.player.next_pos(app);
+        let boxs = self.map.boxs.clone();
+        for (ct, cp) in self.map.boxs.iter_mut() {
+            // 下一个位置是箱子且能推动则推箱子
+            if TargetType::Box.eq(ct) && cp.0.x == x && cp.0.y == y {
+                // 再下一个位置
+                let mut boxp = cp.0;
+                match app.gd {
+                    Gd::None => {}
+                    Gd::Up => boxp.y -= 1,
+                    Gd::Right => boxp.x += 1,
+                    Gd::Down => boxp.y += 1,
+                    Gd::Left => boxp.x -= 1,
+                };
+                // let mc = boxs.iter().find(|m| {
+                //     info!("next mc :{m:?}");
+                //     matches!(m.0, TargetType::Box | TargetType::Wall)
+                //         && m.1 .0.x == boxp.x
+                //         && m.1 .0.y == boxp.y
+                // });
+                let is_box = boxs.iter().any(|m| {
+                    matches!(m.0, TargetType::Box) && m.1 .0.x == boxp.x && m.1 .0.y == boxp.y
+                });
+                let is_wall = self.map.data.iter().flatten().flatten().any(|m| {
+                    matches!(m.0, TargetType::Wall) && m.1 .0.x == boxp.x && m.1 .0.y == boxp.y
+                });
+                if is_box || is_wall {
+                    return false;
+                }
+
+                // 推动箱子
+                match app.gd {
+                    Gd::None => {}
+                    Gd::Up => cp.0.y -= 1,
+                    Gd::Right => cp.0.x += 1,
+                    Gd::Down => cp.0.y += 1,
+                    Gd::Left => cp.0.x -= 1,
+                };
+            }
+        }
+        true
+    }
+
+    /// 游戏结束，条件是所有箱子都在目标点上
+    fn game_over(&mut self) {
+        let goals = self.map.goals.iter().map(|b| b.1 .0).collect::<Vec<_>>();
+        let all = self.map.boxs.iter().all(|b| goals.contains(&b.1 .0));
+        self.game_over = all;
     }
 
     fn draw<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
@@ -130,6 +177,14 @@ impl Sokoban {
                 }
             }
         }
+
+        // 箱子
+        let vp = self.vision.pos;
+        for b in self.map.boxs.iter().map(|b| b.1) {
+            let pp = Pixel(((b.0.x - vp.x), (b.0.y - vp.y)).into(), b.1);
+            pixels.push(pp);
+        }
+
         // 人物
         let pp = {
             let pp = self.player.pos;
@@ -149,7 +204,11 @@ impl Sokoban {
             return true;
         }
         // 检测玩家下一个位置是否有墙
-        self.map.data[y as usize][x as usize].is_some()
+        if let Some(cell) = self.map.data[y as usize][x as usize] {
+            matches!(cell.0, TargetType::Wall)
+        } else {
+            false
+        }
     }
 
     /// 将对应的地图数据复制给视野
@@ -177,7 +236,7 @@ impl Sokoban {
 }
 
 /// 标记地图中的类型,表示墙,人还是目标点
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
 enum TargetType {
     /// 人
     Man,
@@ -192,45 +251,27 @@ enum TargetType {
     /// 目标点
     Goal,
     /// 地板
+    #[default]
     Floor,
 }
 
 type MapCell = (TargetType, Pixel<Rgb888>);
 
 /// 迷宫地图
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct Map {
     /// 宽度
     width: usize,
     /// 长度
     height: usize,
-    /// 地图数据
+    /// 原始地图数据
     data: Vec<Vec<Option<MapCell>>>,
-}
-
-impl core::fmt::Display for Map {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "whidth: {}, height: {}", self.width, self.height);
-        for y in self.data.iter() {
-            for x in y.iter() {
-                if let Some((tt, x)) = x {
-                    match tt {
-                        TargetType::Man => write!(f, "@"),
-                        TargetType::ManOnGoal => write!(f, "+"),
-                        TargetType::Box => write!(f, "$"),
-                        TargetType::BoxOnGoal => write!(f, "*"),
-                        TargetType::Wall => write!(f, "#"),
-                        TargetType::Goal => write!(f, "."),
-                        TargetType::Floor => write!(f, "-"),
-                    };
-                } else {
-                    write!(f, "-");
-                }
-            }
-            writeln!(f);
-        }
-        Ok(())
-    }
+    /// 初始玩家位置
+    player: MapCell,
+    /// 箱子的位置，动态变化
+    boxs: Vec<MapCell>,
+    /// 目标点
+    goals: Vec<MapCell>,
 }
 
 impl Map {
@@ -241,41 +282,47 @@ impl Map {
 
     /// 根据XSB生成地图
     fn from_xsb(xsb: &str) -> Self {
-        let mut width = 1;
-        let mut height = 1;
-        let mut data = Vec::<Vec<Option<(TargetType, Pixel<Rgb888>)>>>::new();
+        let mut map = Self::default();
         for (y, line) in xsb.lines().enumerate() {
-            height = y;
+            map.height = y;
             let y = y as i32;
             let mut tmp = Vec::<Option<(TargetType, Pixel<Rgb888>)>>::new();
             for (x, char) in line.chars().enumerate() {
-                width = x;
+                map.width = x;
                 let x = x as i32;
                 let pos = match char {
-                    '@' => Some((TargetType::Man, Pixel((x, y).into(), Rgb888::CSS_RED))),
-                    '+' => Some((
-                        TargetType::ManOnGoal,
-                        Pixel((x, y).into(), Rgb888::CSS_YELLOW),
-                    )),
-                    '$' => Some((TargetType::Box, Pixel((x, y).into(), Rgb888::CSS_BROWN))),
-                    '*' => Some((
-                        TargetType::BoxOnGoal,
-                        Pixel((x, y).into(), Rgb888::CSS_DARK_SLATE_GRAY),
-                    )),
+                    '@' => {
+                        map.player = (TargetType::Man, Pixel((x, y).into(), Rgb888::CSS_RED));
+                        None
+                    }
+                    // '+' => Some((
+                    //     TargetType::ManOnGoal,
+                    //     Pixel((x, y).into(), Rgb888::CSS_YELLOW),
+                    // )),
+                    '$' => {
+                        map.boxs
+                            .push((TargetType::Box, Pixel((x, y).into(), Rgb888::CSS_BLUE)));
+                        None
+                    }
+                    // '*' => Some((
+                    //     TargetType::BoxOnGoal,
+                    //     Pixel((x, y).into(), Rgb888::CSS_CYAN),
+                    // )),
                     '#' => Some((TargetType::Wall, Pixel((x, y).into(), Rgb888::CSS_WHITE))),
-                    '.' => Some((TargetType::Goal, Pixel((x, y).into(), Rgb888::CSS_GREEN))),
+                    '.' => {
+                        let goal = (TargetType::Goal, Pixel((x, y).into(), Rgb888::CSS_GREEN));
+                        map.goals.push(goal);
+                        Some(goal)
+                    }
                     _ => None,
                 };
                 tmp.push(pos);
             }
-            data.push(tmp);
+            map.data.push(tmp);
         }
-
-        Self {
-            width,
-            height,
-            data,
-        }
+        map.width += 1;
+        map.height += 1;
+        map
     }
 
     /// TODO: 根据LURD生成地图
