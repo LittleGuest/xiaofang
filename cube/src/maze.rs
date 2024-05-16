@@ -22,7 +22,7 @@ use crate::{
 pub struct Maze {
     map: MazeMap,
     player: Player,
-    vision: Vision<()>,
+    vision: Vision<8, 8, ()>,
     /// ms
     waiting_time: u64,
     game_over: bool,

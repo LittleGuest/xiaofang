@@ -30,18 +30,14 @@ impl<T> Map<T> {
 
 /// 视野
 #[derive(Debug)]
-pub struct Vision<T> {
-    // /// 宽度
-    // width: usize,
-    // /// 长度
-    // height: usize,
+pub struct Vision<const W: usize, const H: usize, T> {
     /// 视野左上角坐标
     pub pos: Point,
     /// 视野数据
     pub data: Vec<MapCell<T>>,
 }
 
-impl<T> Display for Vision<T> {
+impl<const W: usize, const H: usize, T> Display for Vision<W, H, T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         writeln!(f, "{:?}", self.pos)?;
         let mut data = self
@@ -54,25 +50,25 @@ impl<T> Display for Vision<T> {
     }
 }
 
-impl<T: Clone> Vision<T> {
+impl<const W: usize, const H: usize, T: Clone> Vision<W, H, T> {
     /// 初始化视野
     pub fn new(width: usize, height: usize, player: Point) -> Self {
         Self {
             pos: {
                 let x = {
-                    if player.x - 3 <= 0 || width < 8 {
+                    if player.x - 3 <= 0 || width < W {
                         0
                     } else if player.x + 5 >= width as i32 {
-                        player.x - 8 + width as i32 - player.x
+                        player.x - W as i32 + width as i32 - player.x
                     } else {
                         player.x - 3
                     }
                 };
                 let y = {
-                    if player.y - 3 <= 0 || height < 8 {
+                    if player.y - 3 <= 0 || height < H {
                         0
                     } else if player.y + 5 >= height as i32 {
-                        player.y - 8 + height as i32 - player.y
+                        player.y - H as i32 + height as i32 - player.y
                     } else {
                         player.y - 3
                     }
@@ -105,21 +101,26 @@ impl<T: Clone> Vision<T> {
     pub fn update_data(&mut self, map: &Map<T>) {
         let Point { x, y } = self.pos;
         let data = map.data.iter();
-        if map.width < 8 && map.height < 8 {
+        if map.width < W && map.height < H {
             self.data.clone_from(&map.data);
-        } else if map.width < 8 {
+        } else if map.width < W {
             self.data = data
-                .filter(|d| d.0 .0.y >= y && d.0 .0.y < y + 8)
+                .filter(|d| d.0 .0.y >= y && d.0 .0.y < y + H as i32)
                 .cloned()
                 .collect::<Vec<_>>();
-        } else if map.height < 8 {
+        } else if map.height < H {
             self.data = data
-                .filter(|d| d.0 .0.x >= x && d.0 .0.x < x + 8)
+                .filter(|d| d.0 .0.x >= x && d.0 .0.x < x + W as i32)
                 .cloned()
                 .collect::<Vec<_>>();
         } else {
             self.data = data
-                .filter(|d| d.0 .0.x >= x && d.0 .0.x < x + 8 && d.0 .0.y >= y && d.0 .0.y < y + 8)
+                .filter(|d| {
+                    d.0 .0.x >= x
+                        && d.0 .0.x < x + W as i32
+                        && d.0 .0.y >= y
+                        && d.0 .0.y < y + H as i32
+                })
                 .cloned()
                 .collect::<Vec<_>>();
         }
@@ -129,11 +130,11 @@ impl<T: Clone> Vision<T> {
     pub fn update(&mut self, gd: Gd, map: &Map<T>) {
         let Point { x, y } = self.next_pos(gd);
         let overlapping = {
-            if map.width < 8 && map.height < 8 {
+            if map.width < W && map.height < H {
                 true
-            } else if map.width < 8 {
+            } else if map.width < W {
                 x < 0 || y < 0 || x > map.width as i32 - 7 || y >= map.height as i32 - 7
-            } else if map.height < 8 {
+            } else if map.height < H {
                 x < 0 || y < 0 || x >= map.width as i32 - 7 || y > map.height as i32 - 7
             } else {
                 x < 0 || y < 0 || x >= map.width as i32 - 7 || y >= map.height as i32 - 7

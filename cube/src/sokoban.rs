@@ -23,7 +23,7 @@ use crate::{
 pub struct Sokoban {
     map: SokobanMap,
     player: Player,
-    vision: Vision<TargetType>,
+    vision: Vision<8, 8, TargetType>,
     /// ms
     waiting_time: u64,
     game_over: bool,
