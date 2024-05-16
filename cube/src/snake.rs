@@ -1,11 +1,13 @@
 #![doc = include_str!("../../rfcs/003_snake.md")]
 
 use alloc::collections::LinkedList;
+use cube_rand::CubeRng;
 use embassy_time::Timer;
+use embedded_graphics::geometry::Point;
 
-use crate::{App, Direction, Gd, Position};
+use crate::{App, Direction, Gd, RNG};
 
-type Food = Position;
+type Food = Point;
 
 #[derive(Debug)]
 pub struct SnakeGame {
@@ -33,11 +35,18 @@ impl SnakeGame {
         let width = 8;
         let height = 8;
 
+        let food = unsafe {
+            Food {
+                x: CubeRng(RNG.assume_init_mut().random() as u64).random(0, width as u32) as i32,
+                y: CubeRng(RNG.assume_init_mut().random() as u64).random(0, height as u32) as i32,
+            }
+        };
+
         Self {
             width,
             height,
-            snake: Snake::new(Position::new(5, 5)),
-            food: Food::random(width, height),
+            snake: Snake::new(Point::new(5, 5)),
+            food,
             waiting_time: 600,
             score: 0,
             highest: 0,
@@ -96,7 +105,7 @@ impl SnakeGame {
         self.score += 1;
     }
 
-    fn outside(&self, next_head: Position) -> bool {
+    fn outside(&self, next_head: Point) -> bool {
         next_head.x < 0
             || next_head.y < 0
             || next_head.x >= self.width
@@ -105,7 +114,14 @@ impl SnakeGame {
 
     fn create_food(&mut self) {
         self.food = loop {
-            let food = Food::random(self.width, self.height);
+            let food = unsafe {
+                Food {
+                    x: CubeRng(RNG.assume_init_mut().random() as u64).random(0, self.width as u32)
+                        as i32,
+                    y: CubeRng(RNG.assume_init_mut().random() as u64).random(0, self.height as u32)
+                        as i32,
+                }
+            };
             if self.snake.body.iter().any(|s| s.eq(&food)) {
                 continue;
             } else {
@@ -130,16 +146,16 @@ impl SnakeGame {
 #[derive(Debug)]
 struct Snake {
     direction: Direction,
-    head: Position,
-    body: LinkedList<Position>,
+    head: Point,
+    body: LinkedList<Point>,
 }
 
 impl Snake {
-    fn new(head: Position) -> Self {
+    fn new(head: Point) -> Self {
         let mut body = LinkedList::new();
         body.push_back(head);
         let (x, y) = (head.x, head.y);
-        body.push_back(Position { x, y: y + 1 });
+        body.push_back(Point { x, y: y + 1 });
 
         Self {
             direction: Direction::Up,
@@ -167,8 +183,18 @@ impl Snake {
         self.head = next_head;
     }
 
-    fn next_head_pos(&self) -> Position {
-        self.head.next(self.direction)
+    fn next_head_pos(&self) -> Point {
+        let mut pos = self.head;
+
+        match self.direction {
+            Direction::Up => {
+                pos.y -= 1;
+            }
+            Direction::Right => pos.x += 1,
+            Direction::Down => pos.y += 1,
+            Direction::Left => pos.x -= 1,
+        }
+        pos
     }
 
     fn overlapping(&self) -> bool {

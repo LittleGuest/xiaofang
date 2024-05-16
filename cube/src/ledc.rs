@@ -61,7 +61,7 @@ impl<'d> LedControl<'d> {
                     BinaryColor::Off
                 };
 
-                pixels.push(Pixel((x, y as i32).into(), on_off.into()));
+                pixels.push(Pixel((x, y as i32).into(), on_off.into())).ok();
             }
         }
         self.write_pixels(pixels);

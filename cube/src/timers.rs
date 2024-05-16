@@ -2,12 +2,13 @@
 
 use alloc::vec::Vec;
 use embassy_time::Timer;
+use embedded_graphics::geometry::Point;
 use embedded_graphics_core::{
     pixelcolor::{BinaryColor, Rgb888},
     Pixel,
 };
 
-use crate::{App, CubeRng, Position, RNG};
+use crate::{App, CubeRng, RNG};
 
 /// 沙漏
 #[derive(Debug, Clone)]
@@ -20,7 +21,7 @@ impl core::default::Default for Timers {
         let mut pixels = Vec::<TimerPixel>::with_capacity(32);
         for y in 0..4 {
             for x in 0..8 {
-                pixels.push(TimerPixel::new(Position::new(x, y), 0.3));
+                pixels.push(TimerPixel::new(Point::new(x, y), 0.3));
             }
         }
         Self { pixels }
@@ -94,9 +95,9 @@ struct TimerPixel {
 }
 
 impl TimerPixel {
-    fn new(pos: Position, speed: f32) -> Self {
+    fn new(pos: Point, speed: f32) -> Self {
         Self {
-            pixel: Pixel((pos.x, pos.y).into(), BinaryColor::On.into()),
+            pixel: Pixel(pos, BinaryColor::On.into()),
             speed,
         }
     }

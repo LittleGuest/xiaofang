@@ -57,21 +57,18 @@ embassy-time = "0.3.0"
 embassy-sync = "0.5.0"
 embassy-net = { version = "0.4.0", features = ["dhcpv4", "tcp", "udp", "dns"] }
 mpu6050-dmp = "0.4.0"
-static_cell = { version = "2.1.0" }
+static_cell = "2.1.0"
 embedded-hal = "1.0.0"
 embedded-graphics = "0.8.1"
 embedded-graphics-core = "0.4.0"
-# lazy_static = { version = "1.4.0", default-features = false, features = [
-#   "spin_no_std",
-# ] }
-ws2812-spi = { path = "../ws2812-spi-rs/" }
-# smart-leds-matrix = { path = "../smart-leds-matrix/" }
-cube_rand = { path = "../cube_rand/" }
 maze = { path = "../maze" }
 esp-storage = { version = "0.3.0", features = ["esp32c3"] }
 embedded-storage = "0.3.1"
 smart-leds-matrix = "0.2.0"
 smart-leds = "0.4.0"
+
+ws2812-spi = { path = "../ws2812-spi-rs/" }
+cube_rand = { path = "../cube_rand/" }
 
 [profile.dev]
 opt-level = "s"

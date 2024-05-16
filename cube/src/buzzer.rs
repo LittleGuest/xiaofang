@@ -1,13 +1,12 @@
 use cube_rand::CubeRng;
 use embassy_time::Timer;
 use esp_hal::{
-    gpio::{GpioPin, Output, OutputPin, PushPull},
+    gpio::{GpioPin, Output, PushPull},
     ledc::{
-        channel::{Channel, ChannelIFace, Number},
-        LowSpeed, LEDC,
+        channel::{Channel, ChannelIFace},
+        LowSpeed,
     },
 };
-use log::info;
 
 use crate::RNG;
 

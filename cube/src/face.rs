@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 use cube_rand::CubeRng;
 use embassy_time::Timer;
 
-use crate::{buzzer::Buzzer, ledc::LedControl, App, RNG};
+use crate::{buzzer::Buzzer, ledc::LedControl, RNG};
 
 /// 表情
 /// 左上角为坐标原点
@@ -17,14 +17,14 @@ impl Face {
         if x > 7 || y > 7 {
             return;
         }
-        self.data[y as usize] |= (1 << (7 - x));
+        self.data[y as usize] |= 1 << (7 - x);
     }
 
     pub fn clear_work(&mut self, x: u8, y: u8) {
         if x > 7 || y > 7 {
             return;
         }
-        self.data[y as usize] ^= (1 << (7 - x));
+        self.data[y as usize] ^= 1 << (7 - x);
     }
 
     pub fn clear(&mut self) {

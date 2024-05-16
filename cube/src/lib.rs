@@ -4,7 +4,7 @@
 #![feature(extract_if)]
 #![allow(unused)]
 
-use core::{mem::MaybeUninit, ops::RangeBounds};
+use core::mem::MaybeUninit;
 
 use alloc::vec::Vec;
 use bagua::BaGua;
@@ -12,11 +12,9 @@ use buzzer::Buzzer;
 use cube_man::CubeManGame;
 use cube_rand::CubeRng;
 use dice::Dice;
+use embassy_executor::Spawner;
 use embassy_time::Timer;
-use embedded_graphics_core::{
-    pixelcolor::{BinaryColor, Rgb888},
-    Pixel,
-};
+use embedded_graphics_core::pixelcolor::Rgb888;
 use embedded_storage::{ReadStorage, Storage};
 use esp_hal::{i2c::I2C, rng::Rng, Blocking};
 use esp_storage::FlashStorage;
@@ -45,8 +43,10 @@ pub mod cube_man;
 pub mod dice;
 pub mod face;
 pub mod ledc;
+pub mod map;
 pub mod mapping;
 pub mod maze;
+pub mod player;
 pub mod snake;
 pub mod sokoban;
 pub mod timers;
@@ -54,96 +54,7 @@ pub mod ui;
 
 pub static mut RNG: MaybeUninit<Rng> = MaybeUninit::uninit();
 
-struct PositionVec(Vec<Position>);
-
-/// 左上角为坐标原点,横x,纵y
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-struct Position {
-    x: i32,
-    y: i32,
-}
-impl From<(usize, usize)> for Position {
-    fn from(value: (usize, usize)) -> Self {
-        Self {
-            x: value.0 as i32,
-            y: value.1 as i32,
-        }
-    }
-}
-
-impl FromIterator<(usize, usize)> for PositionVec {
-    fn from_iter<T: IntoIterator<Item = (usize, usize)>>(iter: T) -> Self {
-        todo!()
-    }
-}
-
-impl Position {
-    fn new(x: i32, y: i32) -> Self {
-        Position { x, y }
-    }
-
-    fn r#move(&mut self, d: Direction) {
-        match d {
-            Direction::Up => {
-                self.y -= 1;
-            }
-            Direction::Right => self.x += 1,
-            Direction::Down => self.y += 1,
-            Direction::Left => self.x -= 1,
-        }
-    }
-
-    fn next(&self, d: Direction) -> Self {
-        let mut pos = *self;
-
-        match d {
-            Direction::Up => {
-                pos.y -= 1;
-            }
-            Direction::Right => pos.x += 1,
-            Direction::Down => pos.y += 1,
-            Direction::Left => pos.x -= 1,
-        }
-        pos
-    }
-
-    fn random(x: i32, y: i32) -> Self {
-        unsafe {
-            Self {
-                x: CubeRng(RNG.assume_init_mut().random() as u64).random(0, x as u32) as i32,
-                y: CubeRng(RNG.assume_init_mut().random() as u64).random(0, y as u32) as i32,
-            }
-        }
-    }
-
-    // fn random_range(x: impl RangeBounds<i8>, y: impl RangeBounds<i8>) -> Self {
-    //     Self {
-    //         x: Rng.random_range(x),
-    //         y: Rng.random_range(y),
-    //     }
-    // }
-
-    fn random_range_usize(x: impl RangeBounds<usize>, y: impl RangeBounds<usize>) -> Self {
-        unsafe {
-            Self {
-                x: CubeRng(RNG.assume_init_mut().random() as u64).random_range(x) as i32,
-                y: CubeRng(RNG.assume_init_mut().random() as u64).random_range(y) as i32,
-            }
-        }
-    }
-}
-
-impl From<Position> for Pixel<Rgb888> {
-    fn from(p: Position) -> Self {
-        Self((p.x, p.y).into(), BinaryColor::On.into())
-    }
-}
-
-impl From<&Position> for Pixel<Rgb888> {
-    fn from(p: &Position) -> Self {
-        Self((p.x, p.y).into(), BinaryColor::On.into())
-    }
-}
+pub type CubeColor = Rgb888;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Direction {
@@ -166,7 +77,7 @@ impl Direction {
 
 /// 重力方向
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
-enum Gd {
+pub enum Gd {
     #[default]
     None,
     Up,
@@ -214,6 +125,7 @@ where
     mpu6050: Mpu6050<I2C<'d, T, Blocking>>,
     ledc: LedControl<'d>,
     buzzer: Buzzer<'d>,
+    spawner: Spawner,
 }
 
 impl<'d, T> App<'d, T>
@@ -254,6 +166,7 @@ where
         mpu6050: Mpu6050<I2C<'d, T, Blocking>>,
         mut ledc: LedControl<'d>,
         buzzer: Buzzer<'d>,
+        spawner: Spawner,
     ) -> Self {
         ledc.set_brightness(0x01);
 
@@ -266,6 +179,7 @@ where
             mpu6050,
             ledc,
             buzzer,
+            spawner,
         }
     }
 

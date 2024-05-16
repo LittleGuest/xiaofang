@@ -2,15 +2,18 @@
 
 use alloc::vec::Vec;
 use embassy_time::Timer;
-use embedded_graphics::{geometry::Point, pixelcolor::PixelColor};
+use embedded_graphics::geometry::Point;
 use embedded_graphics_core::{
     pixelcolor::{BinaryColor, Rgb888},
-    prelude::{RgbColor, WebColors},
+    prelude::WebColors,
     Pixel,
 };
-use log::{debug, info};
 
-use crate::{App, CubeRng, Gd, RNG};
+use crate::{
+    map::{Map, MapCell, Vision},
+    player::Player,
+    App, Gd,
+};
 
 /// 推箱子
 /// 左上角为坐标原点,所有的坐标都为全局坐标
@@ -18,9 +21,9 @@ use crate::{App, CubeRng, Gd, RNG};
 /// 地图的内容根据视野来加载
 #[derive(Debug)]
 pub struct Sokoban {
-    map: Map,
+    map: SokobanMap,
     player: Player,
-    vision: Vision,
+    vision: Vision<TargetType>,
     /// ms
     waiting_time: u64,
     game_over: bool,
@@ -35,51 +38,30 @@ impl Default for Sokoban {
 impl Sokoban {
     pub fn new() -> Self {
         let xsb = "
-#######
-#--#--#
-#-$---#
-#--*.*#
-#-$@*-#
-###$*-#
--#--*-#
--#-#.-#
--#--.-#
--######
+########
+#--#---#
+#-$----#
+#--*.*-#
+#-$@*--#
+###$*--#
+-#--*--#
+-#-#.--#
+-#--.--#
+-#######
 ";
-        let map = Map::from_xsb(xsb);
-        let player = Player::new(map.player.1 .0);
-
-        // 设置一个初始视野坐标
-        let vpx = {
-            if player.pos.x - 3 <= 0 || map.width < 8 {
-                0
-            } else if player.pos.x + 5 >= map.width as i32 {
-                player.pos.x - 8 + map.width as i32 - player.pos.x
-            } else {
-                player.pos.x - 3
-            }
-        };
-        let vpy = {
-            if player.pos.y - 3 <= 0 || map.height < 8 {
-                0
-            } else if player.pos.y + 5 >= map.height as i32 {
-                player.pos.y - 8 + map.height as i32 - player.pos.y
-            } else {
-                player.pos.y - 3
-            }
-        };
-
-        let mut maze = Sokoban {
+        let map = SokobanMap::from_xsb(xsb);
+        let width = map.map.width;
+        let height = map.map.height;
+        let player = Player::new(map.player.0 .0);
+        let mut vision = Vision::new(width, height, player.pos);
+        vision.update_data(&map.map);
+        Sokoban {
             map,
             player,
-            vision: Vision::new(Point::new(vpx, vpy)),
+            vision,
             waiting_time: 300,
             game_over: false,
-        };
-
-        maze.copy_map_to_vision();
-
-        maze
+        }
     }
 
     pub async fn run<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<'_, T>) {
@@ -104,10 +86,10 @@ impl Sokoban {
                 // 不撞墙，是否在推动箱子，能否推动箱子，能一起移动
                 let can_push = self.push_box(app);
                 if can_push {
-                    self.player.r#move(app);
+                    self.player.r#move(app.gd);
                 }
                 // 玩家移动之后视野数据改变
-                self.update_vision(app);
+                self.vision.update(app.gd, &self.map.map);
                 self.game_over();
             }
             self.draw(app);
@@ -116,9 +98,9 @@ impl Sokoban {
 
     /// 推动箱子
     fn push_box<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) -> bool {
-        let Point { x, y } = self.player.next_pos(app);
+        let Point { x, y } = self.player.next_pos(app.gd);
         let boxs = self.map.boxs.clone();
-        for (ct, cp) in self.map.boxs.iter_mut() {
+        for (cp, ct) in self.map.boxs.iter_mut() {
             // 下一个位置是箱子且能推动则推箱子
             if TargetType::Box.eq(ct) && cp.0.x == x && cp.0.y == y {
                 // 再下一个位置
@@ -131,10 +113,10 @@ impl Sokoban {
                     Gd::Left => boxp.x -= 1,
                 };
                 let is_box = boxs.iter().any(|m| {
-                    matches!(m.0, TargetType::Box) && m.1 .0.x == boxp.x && m.1 .0.y == boxp.y
+                    matches!(m.1, TargetType::Box) && m.0 .0.x == boxp.x && m.0 .0.y == boxp.y
                 });
-                let is_wall = self.map.data.iter().flatten().flatten().any(|m| {
-                    matches!(m.0, TargetType::Wall) && m.1 .0.x == boxp.x && m.1 .0.y == boxp.y
+                let is_wall = self.map.map.data.iter().any(|m| {
+                    matches!(m.1, TargetType::Wall) && m.0 .0.x == boxp.x && m.0 .0.y == boxp.y
                 });
                 if is_box || is_wall {
                     return false;
@@ -155,27 +137,30 @@ impl Sokoban {
 
     /// 游戏结束，条件是所有箱子都在目标点上
     fn game_over(&mut self) {
-        let goals = self.map.goals.iter().map(|b| b.1 .0).collect::<Vec<_>>();
-        let all = self.map.boxs.iter().all(|b| goals.contains(&b.1 .0));
+        let goals = self.map.goals.iter().map(|b| b.0 .0).collect::<Vec<_>>();
+        let all = self.map.boxs.iter().all(|b| goals.contains(&b.0 .0));
         self.game_over = all;
     }
 
     fn draw<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         app.ledc.clear_with_color(BinaryColor::Off.into());
-        let mut pixels = Vec::<Pixel<Rgb888>>::new();
-        // 将地图坐标转换为led坐标
-        for y in 0..8 {
-            for x in 0..8 {
-                if let Some(d) = self.vision.data[y][x] {
-                    pixels.push(Pixel((x as i32, y as i32).into(), d.1 .1));
-                }
-            }
-        }
-
         let vp = self.vision.pos;
-        let goals = self.map.goals.iter().map(|m| m.1 .0).collect::<Vec<_>>();
+        let mut pixels = self
+            .map
+            .map
+            .data
+            .iter()
+            .map(|m| m.0)
+            .clone()
+            .collect::<Vec<_>>();
+        // 将全局坐标转换为led坐标
+        for d in pixels.iter_mut() {
+            d.0.x -= vp.x;
+            d.0.y -= vp.y;
+        }
         // 箱子
-        for b in self.map.boxs.iter().map(|b| b.1) {
+        let goals = self.map.goals.iter().map(|m| m.0 .0).collect::<Vec<_>>();
+        for b in self.map.boxs.iter().map(|b| b.0) {
             // 青色表示箱子在目标点上
             let color = if goals.contains(&b.0) {
                 Rgb888::CSS_CYAN
@@ -202,70 +187,20 @@ impl Sokoban {
 
     /// 检测是否撞墙
     fn hit_wall<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) -> bool {
-        let Point { x, y } = self.player.next_pos(app);
-        let overlapping =
-            x <= 0 || y <= 0 || x >= self.map.width as i32 - 1 || y >= self.map.height as i32 - 1;
+        let Point { x, y } = self.player.next_pos(app.gd);
+        let overlapping = x <= 0
+            || y <= 0
+            || x >= self.map.map.width as i32 - 1
+            || y >= self.map.map.height as i32 - 1;
         if overlapping {
             return true;
         }
         // 检测玩家下一个位置是否有墙
-        if let Some(cell) = self.map.data[y as usize][x as usize] {
-            matches!(cell.0, TargetType::Wall)
-        } else {
-            false
-        }
-    }
-
-    /// 将对应的地图数据复制给视野
-    fn copy_map_to_vision(&mut self) {
-        let Point { x, y } = self.vision.pos;
-        if self.map.width < 8 && self.map.height < 8 {
-            for (iy, y) in (y..self.map.height as i32).enumerate() {
-                for (ix, x) in (x..self.map.width as i32).enumerate() {
-                    self.vision.data[iy][ix] = self.map.data[y as usize][x as usize];
-                }
-            }
-        } else if self.map.width < 8 {
-            for (iy, y) in (y..(y + 8)).enumerate() {
-                for (ix, x) in (x..self.map.width as i32).enumerate() {
-                    self.vision.data[iy][ix] = self.map.data[y as usize][x as usize];
-                }
-            }
-        } else if self.map.height < 8 {
-            for (iy, y) in (y..self.map.height as i32).enumerate() {
-                for (ix, x) in (x..(x + 8)).enumerate() {
-                    self.vision.data[iy][ix] = self.map.data[y as usize][x as usize];
-                }
-            }
-        } else {
-            for (iy, y) in (y..(y + 8)).enumerate() {
-                for (ix, x) in (x..(x + 8)).enumerate() {
-                    self.vision.data[iy][ix] = self.map.data[y as usize][x as usize];
-                }
-            }
-        }
-    }
-
-    /// 改变视野位置
-    fn update_vision<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
-        let Point { x, y } = self.vision.next_pos(app);
-        let overlapping = {
-            if self.map.width < 8 && self.map.height < 8 {
-                true
-            } else if self.map.width < 8 {
-                x < 0 || y < 0 || x > self.map.width as i32 - 7 || y >= self.map.height as i32 - 7
-            } else if self.map.height < 8 {
-                x < 0 || y < 0 || x >= self.map.width as i32 - 7 || y > self.map.height as i32 - 7
-            } else {
-                x < 0 || y < 0 || x >= self.map.width as i32 - 7 || y >= self.map.height as i32 - 7
-            }
-        };
-        if overlapping {
-            return;
-        }
-        self.vision.r#move(app);
-        // 根据视野位置更新视野数据
-        self.copy_map_to_vision();
+        self.map
+            .map
+            .data
+            .iter()
+            .any(|c| c.1 == TargetType::Wall && c.0 .0.x == x && c.0 .0.y == y)
     }
 }
 
@@ -285,26 +220,19 @@ enum TargetType {
     Floor,
 }
 
-type MapCell = (TargetType, Pixel<Rgb888>);
-
 /// 迷宫地图
 #[derive(Debug, Default)]
-struct Map {
-    /// 宽度
-    width: usize,
-    /// 长度
-    height: usize,
-    /// 原始地图数据
-    data: Vec<Vec<Option<MapCell>>>,
+struct SokobanMap<T = TargetType> {
+    map: Map<T>,
     /// 初始玩家位置
-    player: MapCell,
+    player: MapCell<T>,
     /// 箱子的位置，动态变化
-    boxs: Vec<MapCell>,
+    boxs: Vec<MapCell<T>>,
     /// 目标点
-    goals: Vec<MapCell>,
+    goals: Vec<MapCell<T>>,
 }
 
-impl Map {
+impl SokobanMap {
     /// TODO: 使用算法生成
     fn new() -> Self {
         unimplemented!()
@@ -315,124 +243,57 @@ impl Map {
         let mut map = Self::default();
         for (y, line) in xsb.trim().lines().enumerate() {
             let y = y as i32;
-            let mut tmp = Vec::<Option<(TargetType, Pixel<Rgb888>)>>::new();
             for (x, char) in line.chars().enumerate() {
                 let x = x as i32;
-                let pos = match char {
+                match char {
                     '@' => {
-                        map.player = (TargetType::Man, Pixel((x, y).into(), Rgb888::CSS_RED));
-                        None
+                        map.player = (Pixel((x, y).into(), Rgb888::CSS_RED), TargetType::Man);
                     }
                     '+' => {
-                        map.player = (TargetType::Man, Pixel((x, y).into(), Rgb888::CSS_RED));
-                        let goal = (TargetType::Goal, Pixel((x, y).into(), Rgb888::CSS_GREEN));
+                        map.player = (Pixel((x, y).into(), Rgb888::CSS_RED), TargetType::Man);
+                        let goal = (Pixel((x, y).into(), Rgb888::CSS_GREEN), TargetType::Goal);
                         map.goals.push(goal);
-                        None
                     }
                     '$' => {
                         map.boxs
-                            .push((TargetType::Box, Pixel((x, y).into(), Rgb888::CSS_BLUE)));
-                        None
+                            .push((Pixel((x, y).into(), Rgb888::CSS_BLUE), TargetType::Box));
                     }
                     '*' => {
                         map.boxs
-                            .push((TargetType::Box, Pixel((x, y).into(), Rgb888::CSS_BLUE)));
-                        let goal = (TargetType::Goal, Pixel((x, y).into(), Rgb888::CSS_GREEN));
+                            .push((Pixel((x, y).into(), Rgb888::CSS_BLUE), TargetType::Box));
+                        let goal = (Pixel((x, y).into(), Rgb888::CSS_GREEN), TargetType::Goal);
                         map.goals.push(goal);
-                        None
                     }
-                    '#' => Some((TargetType::Wall, Pixel((x, y).into(), Rgb888::CSS_WHITE))),
+                    '#' => {
+                        let wall = (Pixel((x, y).into(), Rgb888::CSS_WHITE), TargetType::Wall);
+                        map.map.data.push(wall);
+                    }
                     '.' => {
-                        let goal = (TargetType::Goal, Pixel((x, y).into(), Rgb888::CSS_GREEN));
+                        let goal = (Pixel((x, y).into(), Rgb888::CSS_GREEN), TargetType::Goal);
                         map.goals.push(goal);
-                        Some(goal)
+                        map.map.data.push(goal);
                     }
-                    _ => None,
-                };
-                tmp.push(pos);
+                    _ => {}
+                }
             }
-            map.data.push(tmp);
         }
-
-        map.data.extract_if(|d| d.iter().all(|c| c.is_none()));
-
-        map.height = map.data.len();
-        map.width = if map.height == 0 {
-            0
-        } else {
-            map.data[0].len()
-        };
+        map.map.height = map
+            .map
+            .data
+            .iter()
+            .max_by(|c1, c2| c1.0 .0.y.cmp(&c2.0 .0.y))
+            .map_or(0, |c| (c.0 .0.y + 1) as usize);
+        map.map.width = map
+            .map
+            .data
+            .iter()
+            .max_by(|c1, c2| c1.0 .0.x.cmp(&c2.0 .0.x))
+            .map_or(0, |c| (c.0 .0.x + 1) as usize);
         map
     }
 
     /// TODO: 根据LURD生成地图
-    fn from_lurd(lurd: &str) -> Self {
+    fn from_lurd(_lurd: &str) -> Self {
         unimplemented!()
-    }
-}
-
-/// 视野
-#[derive(Debug)]
-struct Vision {
-    /// 视野左上角坐标
-    pos: Point,
-    /// 视野数据
-    data: [[Option<MapCell>; 8]; 8],
-}
-
-impl Vision {
-    fn new(pos: Point) -> Self {
-        Self {
-            pos,
-            data: [[None; 8]; 8],
-        }
-    }
-
-    fn next_pos<T: esp_hal::i2c::Instance>(&self, app: &mut App<T>) -> Point {
-        let mut pos = self.pos;
-        match app.gd {
-            Gd::None => {}
-            Gd::Up => pos.y -= 1,
-            Gd::Right => pos.x += 1,
-            Gd::Down => pos.y += 1,
-            Gd::Left => pos.x -= 1,
-        };
-        pos
-    }
-
-    fn r#move<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
-        self.pos = self.next_pos(app);
-    }
-}
-
-/// 玩家
-#[derive(Debug, Clone, Copy)]
-struct Player {
-    pos: Point,
-    color: Rgb888,
-}
-
-impl Player {
-    fn new(pos: Point) -> Self {
-        Self {
-            pos,
-            color: Rgb888::CSS_RED,
-        }
-    }
-
-    fn next_pos<T: esp_hal::i2c::Instance>(&self, app: &mut App<T>) -> Point {
-        let mut pos = self.pos;
-        match app.gd {
-            Gd::None => {}
-            Gd::Up => pos.y -= 1,
-            Gd::Right => pos.x += 1,
-            Gd::Down => pos.y += 1,
-            Gd::Left => pos.x -= 1,
-        };
-        pos
-    }
-
-    fn r#move<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
-        self.pos = self.next_pos(app);
     }
 }

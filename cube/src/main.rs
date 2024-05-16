@@ -120,5 +120,5 @@ async fn main(spawner: Spawner) {
     let rng = esp_hal::rng::Rng::new(peripherals.RNG);
     unsafe { cube::RNG.write(rng) };
 
-    cube::App::new(mpu, ledc, buzzer).run().await;
+    cube::App::new(mpu, ledc, buzzer, spawner).run().await;
 }

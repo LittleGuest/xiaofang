@@ -3,16 +3,15 @@
 use alloc::{collections::VecDeque, vec::Vec};
 use cube_rand::CubeRng;
 use embassy_time::Timer;
-use embedded_graphics::pixelcolor::{Gray2, RgbColor};
+use embedded_graphics::{geometry::Point, pixelcolor::RgbColor};
 use embedded_graphics_core::{
     pixelcolor::{BinaryColor, Rgb888},
     prelude::WebColors,
     Pixel,
 };
-use esp_println::dbg;
-use log::{debug, info};
+use esp_hal::embassy::executor::Executor;
 
-use crate::{App, Gd, Position, RNG};
+use crate::{App, Gd, RNG};
 
 /// 是方块人就下一百层
 #[derive(Debug)]
@@ -105,7 +104,7 @@ impl CubeManGame {
             ) {
                 // 随楼梯一起向上运动
                 self.man.up();
-                self.moving_on_floor(&floor, app);
+                self.moving_on_floor(&floor, app).await;
             } else {
                 self.man.fall();
             }
@@ -116,16 +115,16 @@ impl CubeManGame {
         self.score += 1;
     }
 
-    fn outside(&self, pos: &Position) -> bool {
+    fn outside(&self, pos: &Point) -> bool {
         pos.y < 0 || pos.y >= 8
     }
 
-    fn hit_wall(&self, pos: &Position) -> bool {
+    fn hit_wall(&self, pos: &Point) -> bool {
         pos.x < 0 || pos.x >= 8
     }
 
     /// 是否在楼梯上
-    fn on_floor(floors: &[Floor], pos: &Position) -> Option<Floor> {
+    fn on_floor(floors: &[Floor], pos: &Point) -> Option<Floor> {
         let floor = floors.iter().find(|f| {
             let min = f.data.iter().min_by(|x, y| x.cmp(y)).unwrap();
             let max = f.data.iter().max_by(|x, y| x.cmp(y)).unwrap();
@@ -239,7 +238,7 @@ struct Floor {
 }
 
 impl Floor {
-    fn new(ft: FloorType, data: &[Position]) -> Self {
+    fn new(ft: FloorType, data: &[Point]) -> Self {
         match ft {
             FloorType::Normal => Self {
                 r#type: ft,
@@ -275,7 +274,7 @@ impl Floor {
 
 #[derive(Debug)]
 struct FloorGen {
-    pos: Position,
+    pos: Point,
     data: VecDeque<Option<Floor>>,
 }
 
@@ -303,9 +302,9 @@ impl FloorGen {
 
         // 楼梯长度
         let len = unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random_range(3..=5) };
-        let mut data = Vec::<Position>::with_capacity(len);
+        let mut data = Vec::<Point>::with_capacity(len);
         for i in 0..len {
-            data.push((i, 0).into());
+            data.push(Point::new(i as i32, 0));
         }
 
         // TODO: 根据关卡等级生成楼梯
@@ -369,7 +368,7 @@ impl FloorGen {
 #[derive(Debug)]
 struct CubeMan {
     /// 位置
-    pos: Position,
+    pos: Point,
     /// 移动速度
     move_speed: f32,
     /// 下落速度
@@ -379,7 +378,7 @@ struct CubeMan {
 }
 
 impl CubeMan {
-    fn new(pos: Position) -> Self {
+    fn new(pos: Point) -> Self {
         Self {
             pos,
             fall_speed: 1.0,
@@ -388,7 +387,7 @@ impl CubeMan {
         }
     }
 
-    fn next_pos<T: esp_hal::i2c::Instance>(&self, app: &mut App<T>) -> Position {
+    fn next_pos<T: esp_hal::i2c::Instance>(&self, app: &mut App<T>) -> Point {
         let mut pos = self.pos;
         match app.gd {
             Gd::Right => pos.x += 1,
