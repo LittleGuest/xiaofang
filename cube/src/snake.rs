@@ -3,11 +3,13 @@
 use alloc::collections::LinkedList;
 use cube_rand::CubeRng;
 use embassy_time::Timer;
-use embedded_graphics::geometry::Point;
+use embedded_graphics::{
+    geometry::Point,
+    pixelcolor::{Rgb888, WebColors},
+    Pixel,
+};
 
 use crate::{App, Direction, Gd, RNG};
-
-type Food = Point;
 
 #[derive(Debug)]
 pub struct SnakeGame {
@@ -35,18 +37,11 @@ impl SnakeGame {
         let width = 8;
         let height = 8;
 
-        let food = unsafe {
-            Food {
-                x: CubeRng(RNG.assume_init_mut().random() as u64).random(0, width as u32) as i32,
-                y: CubeRng(RNG.assume_init_mut().random() as u64).random(0, height as u32) as i32,
-            }
-        };
-
         Self {
             width,
             height,
             snake: Snake::new(Point::new(5, 5)),
-            food,
+            food: Food::random(width, height),
             waiting_time: 600,
             score: 0,
             highest: 0,
@@ -90,8 +85,8 @@ impl SnakeGame {
         };
 
         let next_head = self.snake.next_head_pos();
-        if self.food.eq(&next_head) {
-            self.snake.grow(self.food);
+        if self.food.pos.eq(&next_head) {
+            self.snake.grow(self.food.clone());
             self.calc_score();
             self.create_food();
         } else if self.outside(next_head) || self.snake.overlapping() {
@@ -114,15 +109,8 @@ impl SnakeGame {
 
     fn create_food(&mut self) {
         self.food = loop {
-            let food = unsafe {
-                Food {
-                    x: CubeRng(RNG.assume_init_mut().random() as u64).random(0, self.width as u32)
-                        as i32,
-                    y: CubeRng(RNG.assume_init_mut().random() as u64).random(0, self.height as u32)
-                        as i32,
-                }
-            };
-            if self.snake.body.iter().any(|s| s.eq(&food)) {
+            let food = Food::random(self.width, self.height);
+            if self.snake.body.iter().any(|s| s.0.eq(&food.pos)) {
                 continue;
             } else {
                 break food;
@@ -133,29 +121,55 @@ impl SnakeGame {
     pub fn draw<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         let ledc = &mut app.ledc;
         ledc.clear();
-        let mut tmp = self.snake.as_bytes();
-        for (i, s) in tmp.iter_mut().enumerate() {
-            if i == self.food.y as usize {
-                *s |= 1 << (7 - self.food.x);
-            }
-        }
-        ledc.write_bytes(tmp);
+        // 蛇身
+        let mut pixels = self.snake.body.clone();
+        // 食物
+        pixels.push_back(self.food.clone().into());
+        ledc.write_pixels(pixels);
     }
 }
 
+/// 食物
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Food {
+    pos: Point,
+    color: Rgb888,
+}
+
+impl From<Food> for Pixel<Rgb888> {
+    fn from(f: Food) -> Self {
+        Pixel(f.pos, f.color)
+    }
+}
+
+impl Food {
+    fn random(width: i32, height: i32) -> Self {
+        let food = unsafe {
+            let x = CubeRng(RNG.assume_init_mut().random() as u64).random(0, width as u32) as i32;
+            let y = CubeRng(RNG.assume_init_mut().random() as u64).random(0, height as u32) as i32;
+            (x, y)
+        };
+        Self {
+            pos: food.into(),
+            color: Rgb888::CSS_RED,
+        }
+    }
+}
+
+/// 贪吃蛇
 #[derive(Debug)]
 struct Snake {
     direction: Direction,
     head: Point,
-    body: LinkedList<Point>,
+    body: LinkedList<Pixel<Rgb888>>,
 }
 
 impl Snake {
     fn new(head: Point) -> Self {
+        let headp = Pixel(head, Rgb888::CSS_WHITE);
         let mut body = LinkedList::new();
-        body.push_back(head);
-        let (x, y) = (head.x, head.y);
-        body.push_back(Point { x, y: y + 1 });
+        body.push_back(headp);
+        body.push_back(Pixel((headp.0.x, headp.0.y + 1).into(), Rgb888::CSS_WHITE));
 
         Self {
             direction: Direction::Up,
@@ -171,16 +185,17 @@ impl Snake {
         self.direction = dir;
     }
 
-    fn grow(&mut self, food: Food) {
-        self.head = food;
-        self.body.push_front(food);
+    fn grow(&mut self, mut food: Food) {
+        self.head = food.pos;
+        food.color = Rgb888::CSS_WHITE;
+        self.body.push_front(food.into());
     }
 
     fn r#move(&mut self) {
-        let next_head = self.next_head_pos();
-        self.body.push_front(next_head);
+        let nh = self.next_head_pos();
+        self.body.push_front(Pixel(nh, Rgb888::CSS_WHITE));
         self.body.pop_back();
-        self.head = next_head;
+        self.head = nh;
     }
 
     fn next_head_pos(&self) -> Point {
@@ -198,7 +213,7 @@ impl Snake {
     }
 
     fn overlapping(&self) -> bool {
-        self.body.iter().skip(1).any(|pos| pos.eq(&self.head))
+        self.body.iter().skip(1).any(|pos| pos.0.eq(&self.head))
     }
 
     fn as_bytes(&self) -> [u8; 8] {
@@ -206,7 +221,7 @@ impl Snake {
         for y in 0..8 {
             let mut tmp = 0;
             for x in 0..8 {
-                if self.body.iter().any(|p| p.x == x && p.y == y) {
+                if self.body.iter().any(|p| p.0.x == x && p.0.y == y) {
                     tmp |= 1 << (7 - x);
                 }
             }

@@ -30,19 +30,23 @@ Rust,esp32c3 嵌入式学习,ws2812 的使用.
 00000000
 ```
 
-- 初始蛇身有头有尾,移动方向默认向上
-
 ## 蛇设计
 
 ```Rust
 struct Snake {
     direction: Direction,
-    head: Position,
-    body: LinkedList<Position>,
+    head: Point,
+    body: LinkedList<Pixel<Rgb888>>,
 }
 ```
 
-蛇本身有移动方向 direction,头部 head 的坐标和身体 body 的坐标(其中包含头部,在 LinkedList 的首部),
+- 初始蛇身有头有尾,移动方向默认向上
+- 蛇本身有移动方向 direction,头部 head 的坐标和身体 body 的坐标(其中包含头部,在 LinkedList 的首部),
+- 蛇的颜色白色
+
+## 食物
+
+食物的颜色红色
 
 # Unresolved questions
 
