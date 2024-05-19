@@ -31,7 +31,7 @@ use snake::SnakeGame;
 use timers::Timers;
 use ui::Ui;
 
-use crate::sokoban::Sokoban;
+use crate::{dodge_cube::DodgeCubeGame, sokoban::Sokoban};
 
 #[macro_use]
 extern crate alloc;
@@ -41,6 +41,7 @@ pub mod battery;
 pub mod buzzer;
 pub mod cube_man;
 pub mod dice;
+pub mod dodge_cube;
 pub mod face;
 pub mod ledc;
 pub mod map;
@@ -171,7 +172,7 @@ where
         ledc.set_brightness(0x01);
 
         App {
-            uis: Ui::uis(),
+            uis: Ui::uis().into(),
             ui_current_idx: 0,
             face: Face::default(),
             gd: Gd::default(),
@@ -242,9 +243,8 @@ where
                         flash_data[0x01] = cm.highest;
                         flash.write(flash_addr, &flash_data).ok();
                     }
-                    Ui::Sokoban => {
-                        Sokoban::new().run(&mut self).await;
-                    }
+                    Ui::Sokoban => Sokoban::new().run(&mut self).await,
+                    Ui::DodgeCube => DodgeCubeGame::new().run(&mut self).await,
                     Ui::Sound => {}
                 },
                 Gd::Right => {

@@ -1,5 +1,3 @@
-use alloc::vec::Vec;
-
 /// 界面
 #[derive(Debug, Default)]
 pub enum Ui {
@@ -18,12 +16,14 @@ pub enum Ui {
     CubeMan,
     /// 推箱子
     Sokoban,
+    /// 躲避方块
+    DodgeCube,
     /// 声音
     Sound,
 }
 
 impl Ui {
-    pub fn uis() -> Vec<Self> {
+    pub fn uis() -> [Ui; 9] {
         [
             Ui::Timer,
             Ui::Dice,
@@ -32,9 +32,9 @@ impl Ui {
             Ui::Maze,
             Ui::CubeMan,
             Ui::Sokoban,
+            Ui::DodgeCube,
             Ui::Sound,
         ]
-        .into()
     }
 
     #[rustfmt::skip]
@@ -109,6 +109,16 @@ impl Ui {
                 0b11011011,
                 0b01000010,
                 0b01111110,
+            ],
+            Ui::DodgeCube => [
+                0b11111111,
+                0b10101101,
+                0b11101101,
+                0b10001101,
+                0b10101101,
+                0b10111110,
+                0b00000000,
+                0b00010000,
             ],
             // Ui::Temp => [
             //     0b00000000,

@@ -88,7 +88,8 @@ impl SnakeGame {
         if self.food.pos.eq(&next_head) {
             self.snake.grow(self.food.clone());
             self.calc_score();
-            self.create_food();
+            self.food
+                .create_food(self.width, self.height, &self.snake.body);
         } else if self.outside(next_head) || self.snake.overlapping() {
             self.game_over = true;
         } else {
@@ -105,17 +106,6 @@ impl SnakeGame {
             || next_head.y < 0
             || next_head.x >= self.width
             || next_head.y >= self.height
-    }
-
-    fn create_food(&mut self) {
-        self.food = loop {
-            let food = Food::random(self.width, self.height);
-            if self.snake.body.iter().any(|s| s.0.eq(&food.pos)) {
-                continue;
-            } else {
-                break food;
-            }
-        };
     }
 
     pub fn draw<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
@@ -152,6 +142,17 @@ impl Food {
         Self {
             pos: food.into(),
             color: Rgb888::CSS_RED,
+        }
+    }
+
+    fn create_food(&self, width: i32, height: i32, snake_body: &LinkedList<Pixel<Rgb888>>) -> Self {
+        loop {
+            let food = Food::random(width, height);
+            if snake_body.iter().any(|s| s.0.eq(&food.pos)) {
+                continue;
+            } else {
+                break food;
+            }
         }
     }
 }
@@ -214,19 +215,5 @@ impl Snake {
 
     fn overlapping(&self) -> bool {
         self.body.iter().skip(1).any(|pos| pos.0.eq(&self.head))
-    }
-
-    fn as_bytes(&self) -> [u8; 8] {
-        let mut bs = [0; 8];
-        for y in 0..8 {
-            let mut tmp = 0;
-            for x in 0..8 {
-                if self.body.iter().any(|p| p.0.x == x && p.0.y == y) {
-                    tmp |= 1 << (7 - x);
-                }
-            }
-            bs[y as usize] = tmp;
-        }
-        bs
     }
 }
