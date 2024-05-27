@@ -92,6 +92,7 @@ impl Dice {
                     .any(|(x, y)| !(-0.3..=0.3).contains(&x) && !(-0.3..=0.3).contains(&y))
             {
                 app.ledc.write_bytes(Self::random());
+                app.buzzer.dice().await;
             }
             Timer::after_millis(800).await;
 

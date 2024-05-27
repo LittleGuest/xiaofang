@@ -200,7 +200,7 @@ where
         );
 
         loop {
-            Timer::after_millis(600).await;
+            Timer::after_millis(400).await;
 
             self.gravity_direction();
 
@@ -212,41 +212,49 @@ where
 
             match self.gd {
                 // 向上进入对应的界面
-                Gd::Up => match self.uis[self.ui_current_idx as usize] {
-                    Ui::Timer => Timers::default().run(&mut self).await,
-                    Ui::Dice => Dice.run(&mut self).await,
-                    Ui::Snake => {
-                        let mut snake = SnakeGame::new();
-                        // 最高分从flash中获取
-                        snake.highest = flash_data[0x00];
-                        snake.run(&mut self).await;
-                        // 游戏结束将最高分再次写入flash
-                        flash_data[0x00] = snake.highest;
-                        flash.write(flash_addr, &flash_data).ok();
-                    }
-                    Ui::BaGua => BaGua::run(&mut self).await,
-                    Ui::Maze => {
-                        let mut cr = unsafe {
-                            CubeRng(RNG.assume_init_mut().random() as u64).random_range(19..=33)
-                        };
-                        if cr % 2 == 0 {
-                            cr += 1;
+                Gd::Up => {
+                    self.buzzer.menu_confirm().await;
+                    match self.uis[self.ui_current_idx as usize] {
+                        Ui::Timer => Timers::default().run(&mut self).await,
+                        Ui::Dice => Dice.run(&mut self).await,
+                        Ui::Snake => {
+                            let mut snake = SnakeGame::new();
+                            // 最高分从flash中获取
+                            snake.highest = flash_data[0x00];
+                            snake.run(&mut self).await;
+                            // 游戏结束将最高分再次写入flash
+                            flash_data[0x00] = snake.highest;
+                            flash.write(flash_addr, &flash_data).ok();
                         }
-                        Maze::new(cr, cr).run(&mut self).await;
+                        Ui::BaGua => BaGua::run(&mut self).await,
+                        Ui::Maze => {
+                            let mut cr = unsafe {
+                                CubeRng(RNG.assume_init_mut().random() as u64).random_range(19..=33)
+                            };
+                            if cr % 2 == 0 {
+                                cr += 1;
+                            }
+                            Maze::new(cr, cr).run(&mut self).await;
+                        }
+                        Ui::CubeMan => {
+                            let mut cm = CubeManGame::new();
+                            // 最高分从flash中获取
+                            cm.highest = flash_data[0x01];
+                            cm.run(&mut self).await;
+                            // 游戏结束将最高分再次写入flash
+                            flash_data[0x01] = cm.highest;
+                            flash.write(flash_addr, &flash_data).ok();
+                        }
+                        Ui::Sokoban => Sokoban::new().run(&mut self).await,
+                        Ui::DodgeCube => DodgeCubeGame::new().run(&mut self).await,
+                        // Ui::Sound => self.buzzer.change(),
+                        Ui::Sound => {
+                            self.face
+                                .dormancy_animate(&mut self.ledc, &mut self.buzzer)
+                                .await;
+                        }
                     }
-                    Ui::CubeMan => {
-                        let mut cm = CubeManGame::new();
-                        // 最高分从flash中获取
-                        cm.highest = flash_data[0x01];
-                        cm.run(&mut self).await;
-                        // 游戏结束将最高分再次写入flash
-                        flash_data[0x01] = cm.highest;
-                        flash.write(flash_addr, &flash_data).ok();
-                    }
-                    Ui::Sokoban => Sokoban::new().run(&mut self).await,
-                    Ui::DodgeCube => DodgeCubeGame::new().run(&mut self).await,
-                    Ui::Sound => {}
-                },
+                }
                 Gd::Right => {
                     self.ui_current_idx += 1;
                     if self.ui_current_idx >= self.uis.len() as i8 {
@@ -254,6 +262,7 @@ where
                     }
                     self.ledc
                         .write_bytes(self.uis[self.ui_current_idx as usize].ui());
+                    self.buzzer.menu_select().await;
                 }
                 Gd::Left => {
                     self.ui_current_idx -= 1;
@@ -262,10 +271,12 @@ where
                     }
                     self.ledc
                         .write_bytes(self.uis[self.ui_current_idx as usize].ui());
+                    self.buzzer.menu_select().await;
                 }
                 _ => {
                     self.ledc
                         .write_bytes(self.uis[self.ui_current_idx as usize].ui());
+                    self.buzzer.menu_select().await;
                 }
             }
         }

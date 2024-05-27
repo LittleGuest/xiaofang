@@ -1,6 +1,7 @@
 use alloc::vec::Vec;
 use cube_rand::CubeRng;
 use embassy_time::Timer;
+use log::info;
 
 use crate::{buzzer::Buzzer, ledc::LedControl, RNG};
 
@@ -175,6 +176,7 @@ impl Face {
         buzzer: &mut Buzzer<'d>,
     ) {
         self.clear();
+
         self.close_eyes();
         self.laugh_mouth();
         ledc.write_bytes(self.data);
@@ -195,6 +197,8 @@ impl Face {
         ledc: &mut LedControl<'d>,
         buzzer: &mut Buzzer<'d>,
     ) {
+        self.clear();
+
         let ex: u8 = 1;
         let ey: u8 = 4;
 
@@ -244,7 +248,7 @@ impl Face {
         for _ in 0..6 {
             let freq =
                 unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random_range(3000..=9000) };
-            buzzer.tone(freq as u64, 50);
+            buzzer.tone(freq as u32, 50);
 
             // 呆滞嘴
             self.slack_face(ex, ey);
@@ -253,7 +257,7 @@ impl Face {
 
             let freq =
                 unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random_range(3000..=9000) };
-            buzzer.tone(freq as u64, 50);
+            buzzer.tone(freq as u32, 50);
 
             // 嘟嘴
             self.pout_face(ex, ey);

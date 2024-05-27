@@ -15,14 +15,17 @@ use embedded_graphics::primitives::{
 };
 use embedded_graphics::transform::Transform;
 use embedded_graphics::Drawable;
+use embedded_hal::delay::DelayNs;
 use esp_backtrace as _;
 use esp_hal::delay::Delay;
 use esp_hal::gpio::IO;
+use esp_hal::ledc::channel::config::PinConfig;
 use esp_hal::ledc::{channel, timer, LSGlobalClkSource, LowSpeed, LEDC};
 use esp_hal::spi::master::Spi;
 use esp_hal::spi::SpiMode;
 use esp_hal::timer::TimerGroup;
 use esp_hal::{clock::ClockControl, i2c::I2C, peripherals::Peripherals, prelude::*};
+use log::info;
 use mpu6050_dmp::address::Address;
 use mpu6050_dmp::sensor::Mpu6050;
 use smart_leds::RGB8;
@@ -58,42 +61,9 @@ async fn main(spawner: Spawner) {
 
     esp_hal::embassy::init(&clocks, tg0);
 
-    // let _init = esp_wifi::initialize(
-    //     esp_wifi::EspWifiInitFor::Wifi,
-    //     timer,
-    //     esp_hal::rng::Rng::new(peripherals.RNG),
-    //     system.radio_clock_control,
-    //     &clocks,
-    // )
-    // .unwrap();
-
     let mut ledc = LEDC::new(peripherals.LEDC, &clocks);
     ledc.set_global_slow_clock(LSGlobalClkSource::APBClk);
-    // 定时器配置:指定 PWM 信号的频率和占空比分辨率
-    let mut lstimer0 = ledc.get_timer::<LowSpeed>(timer::Number::Timer0);
-    lstimer0
-        .configure(timer::config::Config {
-            duty: timer::config::Duty::Duty5Bit,
-            clock_source: timer::LSClockSource::APBClk,
-            frequency: 2.kHz(),
-        })
-        .unwrap();
-    // 通道配置:绑定定时器和输出 PWM 信号的 GPIO
-    let mut channel0 = ledc.get_channel(
-        channel::Number::Channel0,
-        io.pins.gpio8.into_push_pull_output(),
-    );
-    channel0
-        .configure(channel::config::Config {
-            timer: &lstimer0,
-            duty_pct: 10,
-            pin_config: channel::config::PinConfig::PushPull,
-        })
-        .unwrap();
-    // 改变 PWM 信号:输出 PWM 信号来驱动
-    channel0.set_duty(0).unwrap();
-
-    let buzzer = Buzzer::new(channel0);
+    let buzzer = Buzzer::new(ledc, io.pins.gpio11.into_push_pull_output());
 
     let i2c = I2C::new(
         peripherals.I2C0,
@@ -105,12 +75,6 @@ async fn main(spawner: Spawner) {
     );
     let mut mpu = Mpu6050::new(i2c, Address::default()).unwrap();
     mpu.initialize_dmp(&mut delay).unwrap();
-    // let parameters = CalibrationParameters::new(
-    //     AccelFullScale::G2,
-    //     GyroFullScale::Deg2000,
-    //     ReferenceGravity::Zero,
-    // );
-    // let (accel_offset, gyro_offset) = calibrate(&mut mpu, &mut delay, &parameters).unwrap();
 
     let spi =
         Spi::new(peripherals.SPI2, 3_u32.MHz(), SpiMode::Mode0, &clocks).with_mosi(io.pins.gpio3);
