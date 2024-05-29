@@ -1,5 +1,10 @@
 #![doc = include_str!("../../rfcs/005_maze.md")]
 
+use crate::{
+    map::{Map, Vision},
+    player::Player,
+    App, CubeRng, Gd, BUZZER, RNG,
+};
 use alloc::vec::Vec;
 use embassy_time::Timer;
 use embedded_graphics::geometry::Point;
@@ -7,13 +12,6 @@ use embedded_graphics_core::{
     pixelcolor::{BinaryColor, Rgb888},
     prelude::{RgbColor, WebColors},
     Pixel,
-};
-use log::info;
-
-use crate::{
-    map::{Map, Vision},
-    player::Player,
-    App, CubeRng, Gd, BUZZER, RNG,
 };
 
 /// 迷宫

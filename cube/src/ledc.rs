@@ -1,3 +1,4 @@
+use crate::mapping;
 use embedded_graphics::{pixelcolor::*, prelude::*};
 use esp_hal::{
     peripherals::SPI2,
@@ -10,8 +11,6 @@ use smart_leds_matrix::{
     SmartLedMatrix,
 };
 use ws2812_spi::Ws2812;
-
-use crate::mapping;
 
 /// led 数量
 const NUM_LEDS: usize = 64;

@@ -1,5 +1,10 @@
 #![doc = include_str!("../../rfcs/007_sokoban.md")]
 
+use crate::{
+    map::{Map, MapCell, Vision},
+    player::Player,
+    App, Gd, BUZZER,
+};
 use alloc::vec::Vec;
 use embassy_time::Timer;
 use embedded_graphics::geometry::Point;
@@ -7,12 +12,6 @@ use embedded_graphics_core::{
     pixelcolor::{BinaryColor, Rgb888},
     prelude::WebColors,
     Pixel,
-};
-
-use crate::{
-    map::{Map, MapCell, Vision},
-    player::Player,
-    App, Gd, BUZZER,
 };
 
 /// 推箱子

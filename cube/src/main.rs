@@ -1,38 +1,21 @@
 #![no_std]
 #![no_main]
-#![allow(unused)]
 
 use core::mem::MaybeUninit;
 use cube::buzzer::Buzzer;
 use cube::ledc::LedControl;
 use embassy_executor::Spawner;
-use embassy_time::Timer;
-use embedded_graphics::draw_target::DrawTarget;
-use embedded_graphics::geometry::{Point, Size};
-use embedded_graphics::pixelcolor::{Rgb888, RgbColor};
-use embedded_graphics::primitives::{
-    Circle, Line, Primitive, PrimitiveStyle, PrimitiveStyleBuilder, Rectangle,
-};
-use embedded_graphics::transform::Transform;
-use embedded_graphics::Drawable;
-use embedded_hal::delay::DelayNs;
 use esp_backtrace as _;
 use esp_hal::clock::Clocks;
 use esp_hal::delay::Delay;
 use esp_hal::gpio::IO;
-use esp_hal::ledc::channel::config::PinConfig;
-use esp_hal::ledc::{channel, timer, LSGlobalClkSource, LowSpeed, LEDC};
+use esp_hal::ledc::{LSGlobalClkSource, LEDC};
 use esp_hal::spi::master::Spi;
 use esp_hal::spi::SpiMode;
 use esp_hal::timer::TimerGroup;
 use esp_hal::{clock::ClockControl, i2c::I2C, peripherals::Peripherals, prelude::*};
-use log::info;
 use mpu6050_dmp::address::Address;
 use mpu6050_dmp::sensor::Mpu6050;
-use smart_leds::RGB8;
-use smart_leds_matrix::layout::Rectangular;
-use smart_leds_matrix::SmartLedMatrix;
-use ws2812_spi::Ws2812;
 
 extern crate alloc;
 

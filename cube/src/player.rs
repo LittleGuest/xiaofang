@@ -1,10 +1,9 @@
+use crate::Gd;
 use embedded_graphics::{
     geometry::Point,
     pixelcolor::{Rgb888, WebColors},
     Pixel,
 };
-
-use crate::Gd;
 
 /// 玩家
 #[derive(Debug, Clone, Copy)]

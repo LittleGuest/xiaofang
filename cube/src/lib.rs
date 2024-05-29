@@ -2,13 +2,13 @@
 #![no_main]
 #![feature(slice_flatten)]
 #![feature(extract_if)]
-#![allow(unused)]
+#![allow(dead_code)]
 
-use core::{borrow::BorrowMut, mem::MaybeUninit};
-
+use crate::{dodge_cube::DodgeCubeGame, sokoban::Sokoban};
 use alloc::vec::Vec;
 use bagua::BaGua;
 use buzzer::Buzzer;
+use core::mem::MaybeUninit;
 use cube_man::CubeManGame;
 use cube_rand::CubeRng;
 use dice::Dice;
@@ -27,12 +27,8 @@ use mpu6050_dmp::{
     sensor::Mpu6050,
 };
 use snake::SnakeGame;
-
-use static_cell::{ConstStaticCell, StaticCell};
 use timers::Timers;
 use ui::Ui;
-
-use crate::{dodge_cube::DodgeCubeGame, sokoban::Sokoban};
 
 #[macro_use]
 extern crate alloc;

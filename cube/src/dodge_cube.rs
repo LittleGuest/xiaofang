@@ -1,15 +1,9 @@
 #![doc = include_str!("../../rfcs/008_dodge_cube.md")]
 
+use crate::{ledc::LedControl, player::Player, App, Gd};
 use alloc::collections::LinkedList;
-use cube_rand::CubeRng;
 use embassy_time::Timer;
-use embedded_graphics::{
-    geometry::Point,
-    pixelcolor::{Rgb888, WebColors},
-    Pixel,
-};
-
-use crate::{ledc::LedControl, player::Player, App, Direction, Gd, RNG};
+use embedded_graphics::{geometry::Point, pixelcolor::Rgb888, Pixel};
 
 #[derive(Debug)]
 pub struct DodgeCubeGame {
@@ -71,7 +65,7 @@ impl DodgeCubeGame {
         }
     }
 
-    fn r#move(&mut self, gd: &Gd) {}
+    fn r#move(&mut self, _gd: &Gd) {}
 
     fn calc_score(&mut self) {
         self.score += 1;

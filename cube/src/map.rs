@@ -1,9 +1,8 @@
 use core::fmt::Display;
 
+use crate::Gd;
 use alloc::vec::Vec;
 use embedded_graphics::{geometry::Point, pixelcolor::Rgb888, Pixel};
-
-use crate::Gd;
 
 pub type MapCell<T = ()> = (Pixel<Rgb888>, T);
 

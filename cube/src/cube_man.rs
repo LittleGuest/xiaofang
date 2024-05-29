@@ -1,5 +1,6 @@
 #![doc = include_str!("../../rfcs/006_cube_man.md")]
 
+use crate::{App, Gd, RNG};
 use alloc::{collections::VecDeque, vec::Vec};
 use cube_rand::CubeRng;
 use embassy_time::Timer;
@@ -9,9 +10,6 @@ use embedded_graphics_core::{
     prelude::WebColors,
     Pixel,
 };
-use esp_hal::embassy::executor::Executor;
-
-use crate::{App, Gd, RNG};
 
 /// 是方块人就下一百层
 #[derive(Debug)]

@@ -1,5 +1,6 @@
 #![doc = include_str!("../../rfcs/003_snake.md")]
 
+use crate::{App, Direction, Gd, BUZZER, RNG};
 use alloc::collections::LinkedList;
 use cube_rand::CubeRng;
 use embassy_time::Timer;
@@ -8,8 +9,6 @@ use embedded_graphics::{
     pixelcolor::{Rgb888, WebColors},
     Pixel,
 };
-
-use crate::{App, Direction, Gd, BUZZER, RNG};
 
 #[derive(Debug)]
 pub struct SnakeGame {

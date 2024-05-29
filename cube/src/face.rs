@@ -1,9 +1,7 @@
+use crate::{buzzer::Buzzer, ledc::LedControl, BUZZER, RNG};
 use alloc::vec::Vec;
 use cube_rand::CubeRng;
 use embassy_time::Timer;
-use log::info;
-
-use crate::{buzzer::Buzzer, ledc::LedControl, BUZZER, RNG};
 
 /// 表情
 /// 左上角为坐标原点
@@ -182,7 +180,7 @@ impl Face {
         ledc.write_bytes(self.data);
         Timer::after_millis(80).await;
 
-        buzzer.tone(6000, 50);
+        buzzer.tone(6000, 50).await;
 
         self.clear();
         self.slack_eyes(x, y);
@@ -207,7 +205,7 @@ impl Face {
         ledc.write_bytes(self.data);
         Timer::after_millis(500).await;
 
-        buzzer.tone(6000, 50);
+        buzzer.tone(6000, 50).await;
 
         //呆滞眼左看
         self.slack_face(ex - 1, ey);
@@ -219,7 +217,7 @@ impl Face {
         ledc.write_bytes(self.data);
         Timer::after_millis(10).await;
 
-        buzzer.tone(6000, 50);
+        buzzer.tone(6000, 50).await;
 
         //呆滞眼右看
         self.slack_face(ex + 1, ey);
@@ -248,7 +246,7 @@ impl Face {
         for _ in 0..6 {
             let freq =
                 unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random_range(3000..=9000) };
-            buzzer.tone(freq as u32, 50);
+            buzzer.tone(freq as u32, 50).await;
 
             // 呆滞嘴
             self.slack_face(ex, ey);
@@ -257,7 +255,7 @@ impl Face {
 
             let freq =
                 unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random_range(3000..=9000) };
-            buzzer.tone(freq as u32, 50);
+            buzzer.tone(freq as u32, 50).await;
 
             // 嘟嘴
             self.pout_face(ex, ey);
@@ -278,7 +276,7 @@ impl Face {
         let ey: u8 = 4;
 
         for _ in 0..2 {
-            buzzer.tone(8000, 50);
+            buzzer.tone(8000, 50).await;
             self.clear();
             self.close_eyes();
             self.slack_mouth();
@@ -310,7 +308,7 @@ impl Face {
             ledc.write_bytes(self.data);
             Timer::after_millis(500).await;
 
-            buzzer.tone(8000, 50);
+            buzzer.tone(8000, 50).await;
 
             self.clear();
             self.close_eyes();
