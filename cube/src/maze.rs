@@ -8,11 +8,12 @@ use embedded_graphics_core::{
     prelude::{RgbColor, WebColors},
     Pixel,
 };
+use log::info;
 
 use crate::{
     map::{Map, Vision},
     player::Player,
-    App, CubeRng, Gd, RNG,
+    App, CubeRng, Gd, BUZZER, RNG,
 };
 
 /// 迷宫
@@ -72,20 +73,24 @@ impl Maze {
             Timer::after_millis(self.waiting_time).await;
 
             if self.game_over {
-                // TODO: 结束动画和音乐
+                // TODO: 结束动画
+                unsafe { BUZZER.assume_init_mut().maze_over().await };
                 Timer::after_millis(3000).await;
                 break;
             }
             app.gravity_direction();
 
             if !self.hit_wall(app) {
-                self.player.r#move(app.gd);
-                // 玩家移动之后视野数据改变
-                self.vision.update(app.gd, &self.map.map);
-
-                // 游戏结束
-                if self.player.pos.x == self.map.epos.x && self.player.pos.y == self.map.epos.y {
-                    self.game_over = true;
+                let moved = self.player.r#move(app.gd);
+                if moved {
+                    unsafe { BUZZER.assume_init_mut().maze_move().await };
+                    // 玩家移动之后视野数据改变
+                    self.vision.update(app.gd, &self.map.map);
+                    // 游戏结束
+                    if self.player.pos.x == self.map.epos.x && self.player.pos.y == self.map.epos.y
+                    {
+                        self.game_over = true;
+                    }
                 }
             }
             self.draw(app);

@@ -12,7 +12,7 @@ use embedded_graphics_core::{
 use crate::{
     map::{Map, MapCell, Vision},
     player::Player,
-    App, Gd,
+    App, Gd, BUZZER,
 };
 
 /// 推箱子
@@ -74,9 +74,7 @@ impl Sokoban {
             if self.game_over {
                 // TODO: 结束进入下一关
                 Timer::after_millis(1500).await;
-                app.face
-                    .break_record_animate(&mut app.ledc, &mut app.buzzer)
-                    .await;
+                app.face.break_record_animate(&mut app.ledc).await;
                 Timer::after_millis(500).await;
                 break;
             }
@@ -86,11 +84,14 @@ impl Sokoban {
                 // 不撞墙，是否在推动箱子，能否推动箱子，能一起移动
                 let can_push = self.push_box(app);
                 if can_push {
-                    self.player.r#move(app.gd);
+                    let moved = self.player.r#move(app.gd);
+                    if moved {
+                        unsafe { BUZZER.assume_init_mut().sokoban_move().await };
+                    }
+                    // 玩家移动之后视野数据改变
+                    self.vision.update(app.gd, &self.map.map);
+                    self.game_over();
                 }
-                // 玩家移动之后视野数据改变
-                self.vision.update(app.gd, &self.map.map);
-                self.game_over();
             }
             self.draw(app);
         }

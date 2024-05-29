@@ -42,7 +42,6 @@ Rust,esp32c3 嵌入式学习,ws2812 的使用.
 
 [unresolved-questions]: #unresolved-questions
 
-- 闪烁音效
 - 下落动画
 
 # Future possibilities

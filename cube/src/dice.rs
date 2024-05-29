@@ -2,7 +2,7 @@
 
 use embassy_time::Timer;
 
-use crate::{App, CubeRng, RNG};
+use crate::{App, CubeRng, BUZZER, RNG};
 
 /// 骰子
 #[derive(Debug)]
@@ -92,7 +92,7 @@ impl Dice {
                     .any(|(x, y)| !(-0.3..=0.3).contains(&x) && !(-0.3..=0.3).contains(&y))
             {
                 app.ledc.write_bytes(Self::random());
-                app.buzzer.dice().await;
+                unsafe { BUZZER.assume_init_mut().dice().await };
             }
             Timer::after_millis(800).await;
 

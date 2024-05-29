@@ -8,7 +8,7 @@ use embedded_graphics_core::{
     Pixel,
 };
 
-use crate::{App, CubeRng, RNG};
+use crate::{App, CubeRng, BUZZER, RNG};
 
 /// 沙漏
 #[derive(Debug, Clone)]
@@ -108,7 +108,7 @@ impl TimerPixel {
             self.pixel.1 = BinaryColor::from(self.pixel.1).invert().into();
             app.ledc.write_pixel(self.pixel);
             Timer::after_millis(100).await;
-            app.buzzer.timer_pixel_blinky().await;
+            unsafe { BUZZER.assume_init_mut().timer_pixel_blinky().await };
         }
     }
 

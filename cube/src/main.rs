@@ -17,6 +17,7 @@ use embedded_graphics::transform::Transform;
 use embedded_graphics::Drawable;
 use embedded_hal::delay::DelayNs;
 use esp_backtrace as _;
+use esp_hal::clock::Clocks;
 use esp_hal::delay::Delay;
 use esp_hal::gpio::IO;
 use esp_hal::ledc::channel::config::PinConfig;
@@ -47,42 +48,48 @@ fn init_heap() {
     }
 }
 
+pub static mut CLOCKS: MaybeUninit<Clocks> = MaybeUninit::uninit();
+
 #[main]
 async fn main(spawner: Spawner) {
     let peripherals = Peripherals::take();
     let system = peripherals.SYSTEM.split();
-    let clocks = ClockControl::max(system.clock_control).freeze();
-    let mut delay = Delay::new(&clocks);
+    let clocks = ClockControl::boot_defaults(system.clock_control).freeze();
+    unsafe { CLOCKS.write(clocks) };
+    let clocks = unsafe { CLOCKS.assume_init_ref() };
+
+    let mut delay = Delay::new(clocks);
     init_heap();
     esp_println::logger::init_logger_from_env();
     let _timer = esp_hal::systimer::SystemTimer::new(peripherals.SYSTIMER).alarm0;
-    let tg0 = TimerGroup::new_async(peripherals.TIMG0, &clocks);
+    let tg0 = TimerGroup::new_async(peripherals.TIMG0, clocks);
     let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
 
-    esp_hal::embassy::init(&clocks, tg0);
+    esp_hal::embassy::init(clocks, tg0);
 
-    let mut ledc = LEDC::new(peripherals.LEDC, &clocks);
+    let mut ledc = LEDC::new(peripherals.LEDC, clocks);
     ledc.set_global_slow_clock(LSGlobalClkSource::APBClk);
-    let buzzer = Buzzer::new(ledc, io.pins.gpio11.into_push_pull_output());
+    let buzzer = Buzzer::new(io.pins.gpio11.into_push_pull_output(), ledc, spawner);
+    unsafe { cube::BUZZER.write(buzzer) };
 
     let i2c = I2C::new(
         peripherals.I2C0,
         io.pins.gpio4,
         io.pins.gpio5,
         1_000u32.kHz(),
-        &clocks,
+        clocks,
         None,
     );
     let mut mpu = Mpu6050::new(i2c, Address::default()).unwrap();
     mpu.initialize_dmp(&mut delay).unwrap();
 
     let spi =
-        Spi::new(peripherals.SPI2, 3_u32.MHz(), SpiMode::Mode0, &clocks).with_mosi(io.pins.gpio3);
+        Spi::new(peripherals.SPI2, 3_u32.MHz(), SpiMode::Mode0, clocks).with_mosi(io.pins.gpio3);
 
     let ledc = LedControl::new(spi);
 
     let rng = esp_hal::rng::Rng::new(peripherals.RNG);
     unsafe { cube::RNG.write(rng) };
 
-    cube::App::new(mpu, ledc, buzzer, spawner).run().await;
+    cube::App::new(mpu, ledc, spawner).run().await;
 }

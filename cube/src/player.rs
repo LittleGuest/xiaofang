@@ -42,7 +42,8 @@ impl Player {
     }
 
     /// 玩家移动
-    pub fn r#move(&mut self, gd: Gd) {
+    pub fn r#move(&mut self, gd: Gd) -> bool {
         self.pos = self.next_pos(gd);
+        gd != Gd::None
     }
 }

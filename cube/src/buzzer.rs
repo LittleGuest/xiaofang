@@ -1,4 +1,7 @@
+use core::ops::{Bound, Range, RangeBounds};
+
 use cube_rand::CubeRng;
+use embassy_executor::Spawner;
 use embassy_time::Timer;
 use esp_hal::{
     gpio::{GpioPin, Output, PushPull},
@@ -11,21 +14,23 @@ use esp_hal::{
 };
 use log::info;
 
-use crate::RNG;
+use crate::{BUZZER, RNG};
 
 /// 蜂鸣器
 pub struct Buzzer<'d> {
     pub open: bool,
     pin: GpioPin<Output<PushPull>, 11>,
     ledc: LEDC<'d>,
+    spawner: Spawner,
 }
 
 impl<'d> Buzzer<'d> {
-    pub fn new(ledc: LEDC<'d>, pin: GpioPin<Output<PushPull>, 11>) -> Self {
+    pub fn new(pin: GpioPin<Output<PushPull>, 11>, ledc: LEDC<'d>, spawner: Spawner) -> Self {
         Self {
             open: true,
             ledc,
             pin,
+            spawner,
         }
     }
 
@@ -42,7 +47,7 @@ impl<'d> Buzzer<'d> {
     }
 
     /// FIXME: esp_hal::ledc 暂时仅支持固定频率输出，不同频率需要重新配置定时器和通道
-    fn drive(&mut self, frequency: u32, duty_pct: u8) {
+    async fn drive(&mut self, frequency: u32, duty_pct: u8) {
         // 定时器配置:指定 PWM 信号的频率和占空比分辨率
         let mut lstimer0 = self.ledc.get_timer::<LowSpeed>(timer::Number::Timer0);
         lstimer0
@@ -69,14 +74,16 @@ impl<'d> Buzzer<'d> {
     /// frequency: 发声频率,单位HZ
     /// duration: 发声时长,单位毫秒
     pub async fn tone(&mut self, frequency: u32, duration: u64) {
-        self.drive(frequency, 50);
+        self.drive(frequency, 50).await;
         Timer::after_millis(duration).await;
-        self.no_tone();
+        if duration != 0 {
+            self.no_tone().await;
+        }
     }
 
     /// 停止发声
-    pub fn no_tone(&mut self) {
-        self.drive(1, 0);
+    pub async fn no_tone(&mut self) {
+        self.drive(1, 0).await;
     }
 
     /// 菜单选择音效
@@ -84,8 +91,7 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        self.tone(1500, 500).await;
-        self.no_tone();
+        self.spawner.spawn(tone_task(1500, 300));
     }
 
     /// 菜单确认音效
@@ -93,10 +99,7 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        for i in (400..2000).step_by(100) {
-            self.tone(i, 50).await;
-            Timer::after_millis(10).await;
-        }
+        self.spawner.spawn(tone_range_task(400..2000, 50, 100));
     }
 
     /// 菜单进入音效
@@ -104,10 +107,8 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        for i in (200..=3000).rev().step_by(200) {
-            self.tone(i, 50).await;
-            Timer::after_millis(10).await;
-        }
+        self.spawner
+            .spawn(tone_range_task((200..=3000).rev(), 50, 200));
     }
 
     /// 八卦音效
@@ -115,10 +116,8 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        for i in (200..=3000).rev().step_by(400) {
-            self.tone(i, 50).await;
-            Timer::after_millis(10).await;
-        }
+        self.spawner
+            .spawn(tone_range_task((200..=3000).rev(), 50, 400));
     }
 
     /// 骰子音效
@@ -126,52 +125,46 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        for i in (200..=3000).rev().step_by(400) {
-            self.tone(i, 50).await;
-            Timer::after_millis(10).await;
-        }
+        self.spawner
+            .spawn(tone_range_task((200..=3000).rev(), 50, 400));
     }
 
     /// 迷宫移动音效
     pub async fn maze_move(&mut self) {
-        if self.open {
-            self.tone(5000, 50).await;
-            Timer::after_millis(50).await;
-            self.no_tone();
-        } else {
-            Timer::after_millis(50).await;
+        if !self.open {
+            return;
         }
+        self.spawner.spawn(tone_task(5000, 100));
+    }
+
+    /// 迷宫结束音效
+    pub async fn maze_over(&mut self) {
+        if !self.open {
+            return;
+        }
+        self.spawner.spawn(tone_ranges_task(
+            [(6000, 100), (6000, 100), (6000, 100), (6000, 150)].into_iter(),
+        ));
     }
 
     /// 休眠开启音效
     pub async fn hibernation(&mut self) {
-        self.tone(8000, 100).await;
-        Timer::after_millis(100).await;
-        self.tone(2500, 100).await;
-        Timer::after_millis(100).await;
-        self.tone(800, 100).await;
-        Timer::after_millis(100).await;
-        self.no_tone();
+        self.spawner.spawn(tone_ranges_task(
+            [(8000, 100), (2500, 100), (800, 100)].into_iter(),
+        ));
     }
 
     /// 开机音效
     pub async fn power_on(&mut self) {
-        self.tone(800, 200).await;
-        Timer::after_millis(200).await;
-        self.tone(2500, 100).await;
-        Timer::after_millis(100).await;
-        self.tone(8000, 200).await;
-        Timer::after_millis(200).await;
-        self.no_tone();
+        self.spawner.spawn(tone_ranges_task(
+            [(800, 200), (2500, 100), (8000, 200)].into_iter(),
+        ));
     }
 
     /// 唤醒音效
     pub async fn wakeup(&mut self) {
-        self.tone(1500, 200).await;
-        Timer::after_millis(200).await;
-        self.tone(8000, 200).await;
-        Timer::after_millis(200).await;
-        self.no_tone();
+        self.spawner
+            .spawn(tone_ranges_task([(1500, 200), (8000, 200)].into_iter()));
     }
 
     /// 沙漏像素闪烁音效
@@ -179,19 +172,15 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        self.tone(8000, 50).await;
-        self.no_tone();
+        self.spawner.spawn(tone_task(8000, 50));
     }
 
     /// 沙漏像素反弹音效
     pub async fn timer_pixel_rebound(&mut self) {
-        if self.open {
-            self.tone(4000, 50).await;
-            Timer::after_millis(50).await;
-            self.no_tone();
-        } else {
-            Timer::after_millis(50).await;
+        if !self.open {
+            return;
         }
+        self.spawner.spawn(tone_task(4000, 100));
     }
 
     /// 沙漏结束音效
@@ -199,26 +188,17 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        for _ in 0..3 {
-            self.tone(6000, 100).await;
-            // lc.bitmap(all_led_on);
-            // lc.UpLoad();
-            Timer::after_millis(1).await;
-            // lc.clearDisplay();
-            Timer::after_millis(100).await;
-            self.no_tone();
-            Timer::after_millis(20).await;
-        }
+        self.spawner.spawn(tone_ranges_task(
+            [(6000, 100), (6000, 100), (6000, 100), (6000, 150)].into_iter(),
+        ));
+    }
 
-        // lc.setIntensity(2);
-        // lc.bitmap(all_led_on);
-        // lc.UpLoad();
-        self.tone(6000, 150).await;
-        Timer::after_millis(50).await;
-        // lc.clearDisplay();
-        Timer::after_millis(100).await;
-        self.no_tone();
-        // lc.setIntensity(8);
+    /// 贪吃蛇移动音效
+    pub async fn snake_move(&mut self) {
+        if !self.open {
+            return;
+        }
+        self.spawner.spawn(tone_task(5000, 100));
     }
 
     /// 贪吃蛇得分音效
@@ -226,22 +206,9 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        // lc.setIntensity(3);
-        Timer::after_millis(100).await;
-        self.tone(2000, 1000).await;
-        Timer::after_millis(15).await;
-        self.no_tone();
-        // lc.setIntensity(0);
-        Timer::after_millis(50).await;
-        self.tone(3000, 1000).await;
-        Timer::after_millis(15).await;
-        self.no_tone();
-        // lc.setIntensity(3);
-        Timer::after_millis(25).await;
-        self.tone(2000, 1000).await;
-        Timer::after_millis(15).await;
-        self.no_tone();
-        // lc.setIntensity(0);
+        self.spawner.spawn(tone_ranges_task(
+            [(2000, 1000), (3000, 1000), (2000, 1000)].into_iter(),
+        ));
     }
 
     /// 贪吃蛇死亡音效
@@ -249,13 +216,17 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        self.tone(500, 1000).await;
-        Timer::after_millis(160).await;
-        self.tone(300, 1000).await;
-        Timer::after_millis(160).await;
-        self.tone(100, 1000).await;
-        Timer::after_millis(200).await;
-        self.no_tone();
+        self.spawner.spawn(tone_ranges_task(
+            [(500, 1000), (300, 1000), (100, 1000)].into_iter(),
+        ));
+    }
+
+    /// 推箱子移动音效
+    pub async fn sokoban_move(&mut self) {
+        if !self.open {
+            return;
+        }
+        self.spawner.spawn(tone_task(5000, 100));
     }
 
     /// 休眠音效
@@ -271,13 +242,12 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        self.tone(
+        self.spawner.spawn(tone_task(
             unsafe {
                 CubeRng(RNG.assume_init_mut().random() as u64).random_range(3000..=9000) as u32
             },
             50,
-        )
-        .await;
+        ));
     }
 
     /// 眨眼音效
@@ -285,7 +255,7 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        self.tone(8000, 50).await;
+        self.spawner.spawn(tone_task(8000, 50));
     }
 
     /// 眨眼音效2
@@ -293,6 +263,32 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        self.tone(5000, 50).await;
+        self.spawner.spawn(tone_task(5000, 50));
+    }
+}
+
+#[embassy_executor::task]
+async fn tone_task(frequency: u32, duration: u64) {
+    let buzzer = unsafe { BUZZER.assume_init_mut() };
+    buzzer.tone(frequency, duration).await;
+}
+
+#[embassy_executor::task]
+async fn tone_range_task(
+    freq_range: impl Iterator<Item = u32> + 'static,
+    duration: u64,
+    step: usize,
+) {
+    let buzzer = unsafe { BUZZER.assume_init_mut() };
+    for i in freq_range.step_by(step) {
+        buzzer.tone(i, duration).await;
+    }
+}
+
+#[embassy_executor::task]
+async fn tone_ranges_task(range: impl Iterator<Item = (u32, u64)> + 'static) {
+    let buzzer = unsafe { BUZZER.assume_init_mut() };
+    for (freq, dur) in range {
+        buzzer.tone(freq, dur).await;
     }
 }

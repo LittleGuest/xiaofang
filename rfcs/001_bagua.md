@@ -143,7 +143,6 @@ Rust,esp32c3 嵌入式学习,ws2812 的使用.
 [unresolved-questions]: #unresolved-questions
 
 - 摇动的动画
-- 摇动的音效
 
 # Future possibilities
 

@@ -52,8 +52,7 @@ struct Snake {
 
 [unresolved-questions]: #unresolved-questions
 
-- 吃掉食物的动画和音效
-- 移动音效,得分音效和画面效果,死亡音效
+- 得分画面效果,
 
 # Future possibilities
 

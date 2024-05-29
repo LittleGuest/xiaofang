@@ -3,7 +3,7 @@ use cube_rand::CubeRng;
 use embassy_time::Timer;
 use log::info;
 
-use crate::{buzzer::Buzzer, ledc::LedControl, RNG};
+use crate::{buzzer::Buzzer, ledc::LedControl, BUZZER, RNG};
 
 /// 表情
 /// 左上角为坐标原点
@@ -297,10 +297,11 @@ impl Face {
     pub async fn break_record_animate<'d>(
         &mut self,
         ledc: &mut LedControl<'d>,
-        buzzer: &mut Buzzer<'d>,
+        // buzzer: &mut Buzzer<'d>,
     ) {
         let ex = 1;
         let ey = 4;
+        let buzzer = unsafe { BUZZER.assume_init_mut() };
 
         for _ in 0..3 {
             self.clear();

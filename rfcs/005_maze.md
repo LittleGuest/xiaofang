@@ -113,8 +113,7 @@ struct MazeMap {
 
 [unresolved-questions]: #unresolved-questions
 
-- 开始动画和音乐
-- 结束动画和音乐
+无
 
 # Future possibilities
 

@@ -4,7 +4,7 @@
 #![feature(extract_if)]
 #![allow(unused)]
 
-use core::mem::MaybeUninit;
+use core::{borrow::BorrowMut, mem::MaybeUninit};
 
 use alloc::vec::Vec;
 use bagua::BaGua;
@@ -28,6 +28,7 @@ use mpu6050_dmp::{
 };
 use snake::SnakeGame;
 
+use static_cell::{ConstStaticCell, StaticCell};
 use timers::Timers;
 use ui::Ui;
 
@@ -53,9 +54,10 @@ pub mod sokoban;
 pub mod timers;
 pub mod ui;
 
-pub static mut RNG: MaybeUninit<Rng> = MaybeUninit::uninit();
-
 pub type CubeColor = Rgb888;
+pub static mut RNG: MaybeUninit<Rng> = MaybeUninit::uninit();
+pub static mut BUZZER: MaybeUninit<Buzzer> = MaybeUninit::uninit();
+pub static mut LEDCTL: MaybeUninit<LedControl> = MaybeUninit::uninit();
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Direction {
@@ -125,7 +127,6 @@ where
 
     mpu6050: Mpu6050<I2C<'d, T, Blocking>>,
     ledc: LedControl<'d>,
-    buzzer: Buzzer<'d>,
     spawner: Spawner,
 }
 
@@ -166,7 +167,6 @@ where
     pub fn new(
         mpu6050: Mpu6050<I2C<'d, T, Blocking>>,
         mut ledc: LedControl<'d>,
-        buzzer: Buzzer<'d>,
         spawner: Spawner,
     ) -> Self {
         ledc.set_brightness(0x01);
@@ -179,7 +179,6 @@ where
 
             mpu6050,
             ledc,
-            buzzer,
             spawner,
         }
     }
@@ -200,7 +199,7 @@ where
         );
 
         loop {
-            Timer::after_millis(400).await;
+            Timer::after_millis(500).await;
 
             self.gravity_direction();
 
@@ -213,7 +212,7 @@ where
             match self.gd {
                 // 向上进入对应的界面
                 Gd::Up => {
-                    self.buzzer.menu_confirm().await;
+                    unsafe { BUZZER.assume_init_mut().menu_confirm().await };
                     match self.uis[self.ui_current_idx as usize] {
                         Ui::Timer => Timers::default().run(&mut self).await,
                         Ui::Dice => Dice.run(&mut self).await,
@@ -247,12 +246,7 @@ where
                         }
                         Ui::Sokoban => Sokoban::new().run(&mut self).await,
                         Ui::DodgeCube => DodgeCubeGame::new().run(&mut self).await,
-                        // Ui::Sound => self.buzzer.change(),
-                        Ui::Sound => {
-                            self.face
-                                .dormancy_animate(&mut self.ledc, &mut self.buzzer)
-                                .await;
-                        }
+                        Ui::Sound => unsafe { BUZZER.assume_init_mut().change() },
                     }
                 }
                 Gd::Right => {
@@ -262,7 +256,7 @@ where
                     }
                     self.ledc
                         .write_bytes(self.uis[self.ui_current_idx as usize].ui());
-                    self.buzzer.menu_select().await;
+                    unsafe { BUZZER.assume_init_mut().menu_select().await };
                 }
                 Gd::Left => {
                     self.ui_current_idx -= 1;
@@ -271,12 +265,11 @@ where
                     }
                     self.ledc
                         .write_bytes(self.uis[self.ui_current_idx as usize].ui());
-                    self.buzzer.menu_select().await;
+                    unsafe { BUZZER.assume_init_mut().menu_select().await };
                 }
                 _ => {
                     self.ledc
                         .write_bytes(self.uis[self.ui_current_idx as usize].ui());
-                    self.buzzer.menu_select().await;
                 }
             }
         }

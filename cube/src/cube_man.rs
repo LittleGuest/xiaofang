@@ -59,9 +59,7 @@ impl CubeManGame {
                 Timer::after_millis(1500).await;
                 if self.score > self.highest {
                     self.highest = self.score;
-                    app.face
-                        .break_record_animate(&mut app.ledc, &mut app.buzzer)
-                        .await;
+                    app.face.break_record_animate(&mut app.ledc).await;
                 }
                 Timer::after_millis(500).await;
                 break;

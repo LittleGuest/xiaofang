@@ -9,7 +9,7 @@ use embedded_graphics::{
     Pixel,
 };
 
-use crate::{App, Direction, Gd, RNG};
+use crate::{App, Direction, Gd, BUZZER, RNG};
 
 #[derive(Debug)]
 pub struct SnakeGame {
@@ -57,25 +57,25 @@ impl SnakeGame {
             Timer::after_millis(self.waiting_time).await;
 
             if self.game_over {
+                unsafe { BUZZER.assume_init_mut().snake_die().await };
                 app.ledc.draw_score(self.score);
                 Timer::after_millis(1500).await;
                 if self.score > self.highest {
                     self.highest = self.score;
-                    app.face
-                        .break_record_animate(&mut app.ledc, &mut app.buzzer)
-                        .await;
+                    app.face.break_record_animate(&mut app.ledc).await;
                 }
                 Timer::after_millis(500).await;
                 break;
             }
             app.gravity_direction();
-            self.r#move(&app.gd);
-            // TODO: 移动音效,得分音效和画面效果,死亡音效
+
+            self.r#move(&app.gd).await;
+
             self.draw(app);
         }
     }
 
-    fn r#move(&mut self, gd: &Gd) {
+    async fn r#move(&mut self, gd: &Gd) {
         match gd {
             Gd::None => {}
             Gd::Up => self.snake.set_direction(Direction::Up),
@@ -86,14 +86,19 @@ impl SnakeGame {
 
         let next_head = self.snake.next_head_pos();
         if self.food.pos.eq(&next_head) {
+            unsafe { BUZZER.assume_init_mut().snake_score().await };
+            // TODO: 得分画面效果
+
             self.snake.grow(self.food.clone());
-            self.calc_score();
             self.food
                 .create_food(self.width, self.height, &self.snake.body);
+            self.calc_score();
+            unsafe { BUZZER.assume_init_mut().snake_move().await };
         } else if self.outside(next_head) || self.snake.overlapping() {
             self.game_over = true;
         } else {
             self.snake.r#move();
+            unsafe { BUZZER.assume_init_mut().snake_move().await };
         }
     }
 
