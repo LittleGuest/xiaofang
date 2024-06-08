@@ -49,6 +49,19 @@
 | V+     | 3.3V  |
 | V-     | GND   |
 
+### 麦克风
+
+| -   | MCU   |
+| --- | ----- |
+| A0  | GPIO0 |
+| V+  | 5V    |
+| GND | GND   |
+| D0  | -     |
+
 ## 三方库
 
 - https://github.com/smart-leds-rs/ws2812-spi-rs,修改了部分源码
+
+## 参考链接
+
+- https://blog.theembeddedrustacean.com/esp32-embedded-rust-at-the-hal-pwm-buzzer

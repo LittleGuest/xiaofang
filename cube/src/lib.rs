@@ -1,6 +1,5 @@
 #![no_std]
 #![no_main]
-#![feature(slice_flatten)]
 #![feature(extract_if)]
 #![allow(dead_code)]
 
@@ -211,6 +210,9 @@ where
                     unsafe { BUZZER.assume_init_mut().menu_confirm().await };
                     match self.uis[self.ui_current_idx as usize] {
                         Ui::Timer => Timers::default().run(&mut self).await,
+                        Ui::MusicSpectrum => {
+                            // 麦克风采集信息，通过fft转换
+                        }
                         Ui::Dice => Dice.run(&mut self).await,
                         Ui::Snake => {
                             let mut snake = SnakeGame::new();
