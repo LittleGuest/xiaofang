@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 #![feature(extract_if)]
-#![allow(dead_code)]
+#![allow(unused)]
 
 use crate::{dodge_cube::DodgeCubeGame, sokoban::Sokoban};
 use alloc::vec::Vec;

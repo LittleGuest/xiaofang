@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 #![feature(core_intrinsics)]
-#![allow(dead_code)]
+#![allow(unused)]
 
 use alloc::vec::Vec;
 use core::f32::consts::PI;
@@ -12,15 +12,16 @@ use cube::ledc::LedControl;
 use embassy_executor::Spawner;
 use embassy_time::Timer;
 use esp_backtrace as _;
-use esp_hal::analog::adc::{AdcConfig, Attenuation, ADC};
+use esp_hal::analog::adc::{Adc, AdcConfig, Attenuation};
 use esp_hal::clock::Clocks;
 use esp_hal::delay::Delay;
-use esp_hal::gpio::IO;
-use esp_hal::ledc::{LSGlobalClkSource, LEDC};
+use esp_hal::gpio::Io;
+use esp_hal::ledc::{LSGlobalClkSource, Ledc};
 use esp_hal::peripherals::ADC1;
 use esp_hal::spi::master::Spi;
 use esp_hal::spi::SpiMode;
-use esp_hal::timer::TimerGroup;
+use esp_hal::system::SystemControl;
+use esp_hal::timer::timg::TimerGroup;
 use esp_hal::{clock::ClockControl, i2c::I2C, peripherals::Peripherals, prelude::*};
 use log::info;
 use mpu6050_dmp::address::Address;
@@ -48,23 +49,34 @@ pub static mut CLOCKS: MaybeUninit<Clocks> = MaybeUninit::uninit();
 #[main]
 async fn main(spawner: Spawner) {
     let peripherals = Peripherals::take();
-    let system = peripherals.SYSTEM.split();
-    let clocks = ClockControl::boot_defaults(system.clock_control).freeze();
+    let system = SystemControl::new(peripherals.SYSTEM);
+    let clocks = ClockControl::max(system.clock_control).freeze();
+
     unsafe { CLOCKS.write(clocks) };
     let clocks = unsafe { CLOCKS.assume_init_ref() };
 
     let mut delay = Delay::new(clocks);
     init_heap();
     esp_println::logger::init_logger_from_env();
-    let _timer = esp_hal::systimer::SystemTimer::new(peripherals.SYSTIMER).alarm0;
+    let _timer = esp_hal::timer::systimer::SystemTimer::new(peripherals.SYSTIMER).alarm0;
     let tg0 = TimerGroup::new_async(peripherals.TIMG0, clocks);
-    let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
 
-    esp_hal::embassy::init(clocks, tg0);
+    // let _init = esp_wifi::initialize(
+    //     esp_wifi::EspWifiInitFor::Wifi,
+    //     timer,
+    //     esp_hal::rng::Rng::new(peripherals.RNG),
+    //     peripherals.RADIO_CLK,
+    //     &clocks,
+    // )
+    // .unwrap();
 
-    let mut ledc = LEDC::new(peripherals.LEDC, clocks);
+    let io = Io::new(peripherals.GPIO, peripherals.IO_MUX);
+
+    esp_hal_embassy::init(clocks, tg0);
+
+    let mut ledc = Ledc::new(peripherals.LEDC, clocks);
     ledc.set_global_slow_clock(LSGlobalClkSource::APBClk);
-    let buzzer = Buzzer::new(io.pins.gpio11.into_push_pull_output(), ledc, spawner);
+    let buzzer = Buzzer::new(io.pins.gpio11, ledc, spawner);
     unsafe { cube::BUZZER.write(buzzer) };
 
     let i2c = I2C::new(
@@ -86,9 +98,8 @@ async fn main(spawner: Spawner) {
     unsafe { cube::RNG.write(rng) };
 
     let mut adc1_config = AdcConfig::new();
-    let mut adc1_pin =
-        adc1_config.enable_pin(io.pins.gpio1.into_analog(), Attenuation::Attenuation11dB);
-    let mut adc1 = ADC::new(peripherals.ADC1, adc1_config);
+    let mut adc1_pin = adc1_config.enable_pin(io.pins.gpio1, Attenuation::Attenuation11dB);
+    let mut adc1 = Adc::new(peripherals.ADC1, adc1_config);
 
     let mut samples = alloc::vec![0.0;64];
     loop {
@@ -114,7 +125,7 @@ async fn main(spawner: Spawner) {
         // 频率（Hz），频谱中的频率值（幅度）
         for (fr, fr_val) in spectrum_hann_window.data().iter() {
             let maped = map_range(fr.val(), 80., 4000., 0., 8.);
-            info!("{fr}Hz => {fr_val}, maped: {maped},round: {}", unsafe {
+            info!("{fr}Hz => {fr_val}, maped: {maped},round: {:?}", unsafe {
                 roundf32(maped)
             });
         }

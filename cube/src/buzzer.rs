@@ -3,25 +3,26 @@ use cube_rand::CubeRng;
 use embassy_executor::Spawner;
 use embassy_time::Timer;
 use esp_hal::{
-    gpio::{GpioPin, Output, PushPull},
+    gpio::GpioPin,
     ledc::{
-        channel::{self, config::PinConfig, ChannelIFace},
-        timer::{self, TimerIFace},
-        LowSpeed, LEDC,
+        channel::{self, config::PinConfig},
+        timer, Ledc, LowSpeed,
     },
-    prelude::_fugit_RateExtU32,
+    prelude::{
+        _esp_hal_ledc_channel_ChannelIFace, _esp_hal_ledc_timer_TimerIFace, _fugit_RateExtU32,
+    },
 };
 
 /// 蜂鸣器
 pub struct Buzzer<'d> {
     pub open: bool,
-    pin: GpioPin<Output<PushPull>, 11>,
-    ledc: LEDC<'d>,
+    pin: GpioPin<11>,
+    ledc: Ledc<'d>,
     spawner: Spawner,
 }
 
 impl<'d> Buzzer<'d> {
-    pub fn new(pin: GpioPin<Output<PushPull>, 11>, ledc: LEDC<'d>, spawner: Spawner) -> Self {
+    pub fn new(pin: GpioPin<11>, ledc: Ledc<'d>, spawner: Spawner) -> Self {
         Self {
             open: true,
             ledc,

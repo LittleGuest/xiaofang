@@ -6,27 +6,24 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
-esp-backtrace = { version = "0.11.1", features = [
+esp-backtrace = { version = "0.12.1", features = [
   "esp32c3",
   "exception-handler",
   "panic-handler",
   "println",
 ] }
-esp-hal = { version = "0.17.0", features = [
+esp-hal = { version = "0.18.0", features = ["esp32c3", "async"] }
+esp-hal-embassy = { version = "0.1.0", features = [
   "esp32c3",
-  "async",
-  "embassy",
-  "embassy-executor-thread",
-  "embassy-executor-interrupt",
-  "embassy-integrated-timers",
-  "embassy-time-timg0",
+  "integrated-timers",
+  "time-timg0",
 ] }
 esp-println = { version = "0.9.1", features = ["esp32c3", "log"] }
 log = { version = "0.4.21" }
-esp-alloc = { version = "0.3.0" }
+esp-alloc = { version = "0.4.0" }
 embedded-svc = { version = "0.27.1", default-features = false, features = [] }
 embedded-io = "0.6.1"
-esp-wifi = { version = "0.5.1", features = [
+esp-wifi = { version = "0.6.0", features = [
   "esp32c3",
   "phy-enable-usb",
   "utils",
@@ -54,7 +51,7 @@ embassy-executor = { version = "0.5.0", features = [
   # "executor-thread",
 ] }
 embassy-time = "0.3.0"
-embassy-sync = "0.5.0"
+embassy-sync = "0.6.0"
 embassy-net = { version = "0.4.0", features = ["dhcpv4", "tcp", "udp", "dns"] }
 mpu6050-dmp = "0.4.0"
 static_cell = "2.1.0"
