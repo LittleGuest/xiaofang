@@ -62,6 +62,10 @@
 
 - https://github.com/smart-leds-rs/ws2812-spi-rs,修改了部分源码
 
+## 硬件相关
+
+第一次设计画PCB，暂时不知道有啥问题，未验证。
+
 ## 参考链接
 
 - https://blog.theembeddedrustacean.com/esp32-embedded-rust-at-the-hal-pwm-buzzer
