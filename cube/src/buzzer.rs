@@ -1,4 +1,5 @@
 use crate::{BUZZER, RNG};
+use alloc::vec::Vec;
 use cube_rand::CubeRng;
 use embassy_executor::Spawner;
 use embassy_time::Timer;
@@ -94,7 +95,8 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        self.spawner.spawn(tone_range_task(400..2000, 50, 100)).ok();
+        let range = (400..2000).step_by(100).collect::<Vec<u32>>();
+        self.spawner.spawn(tone_range_task(range, 50)).ok();
     }
 
     /// 菜单进入音效
@@ -102,9 +104,8 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        self.spawner
-            .spawn(tone_range_task((200..=3000).rev(), 50, 200))
-            .ok();
+        let range = (200..=3000).rev().step_by(200).collect::<Vec<u32>>();
+        self.spawner.spawn(tone_range_task(range, 50)).ok();
     }
 
     /// 八卦音效
@@ -112,9 +113,8 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        self.spawner
-            .spawn(tone_range_task((200..=3000).rev(), 50, 400))
-            .ok();
+        let range = (200..=3000).rev().step_by(200).collect::<Vec<u32>>();
+        self.spawner.spawn(tone_range_task(range, 50)).ok();
     }
 
     /// 骰子音效
@@ -122,9 +122,8 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        self.spawner
-            .spawn(tone_range_task((200..=3000).rev(), 50, 400))
-            .ok();
+        let range = (200..=3000).rev().step_by(400).collect::<Vec<u32>>();
+        self.spawner.spawn(tone_range_task(range, 50)).ok();
     }
 
     /// 迷宫移动音效
@@ -141,34 +140,33 @@ impl<'d> Buzzer<'d> {
             return;
         }
         self.spawner
-            .spawn(tone_ranges_task(
-                [(6000, 100), (6000, 100), (6000, 100), (6000, 150)].into_iter(),
-            ))
+            .spawn(tone_ranges_task(&[
+                (6000, 100),
+                (6000, 100),
+                (6000, 100),
+                (6000, 150),
+            ]))
             .ok();
     }
 
     /// 休眠开启音效
     pub async fn hibernation(&mut self) {
         self.spawner
-            .spawn(tone_ranges_task(
-                [(8000, 100), (2500, 100), (800, 100)].into_iter(),
-            ))
+            .spawn(tone_ranges_task(&[(8000, 100), (2500, 100), (800, 100)]))
             .ok();
     }
 
     /// 开机音效
     pub async fn power_on(&mut self) {
         self.spawner
-            .spawn(tone_ranges_task(
-                [(800, 200), (2500, 100), (8000, 200)].into_iter(),
-            ))
+            .spawn(tone_ranges_task(&[(800, 200), (2500, 100), (8000, 200)]))
             .ok();
     }
 
     /// 唤醒音效
     pub async fn wakeup(&mut self) {
         self.spawner
-            .spawn(tone_ranges_task([(1500, 200), (8000, 200)].into_iter()))
+            .spawn(tone_ranges_task(&[(1500, 200), (8000, 200)]))
             .ok();
     }
 
@@ -194,9 +192,12 @@ impl<'d> Buzzer<'d> {
             return;
         }
         self.spawner
-            .spawn(tone_ranges_task(
-                [(6000, 100), (6000, 100), (6000, 100), (6000, 150)].into_iter(),
-            ))
+            .spawn(tone_ranges_task(&[
+                (6000, 100),
+                (6000, 100),
+                (6000, 100),
+                (6000, 150),
+            ]))
             .ok();
     }
 
@@ -214,9 +215,11 @@ impl<'d> Buzzer<'d> {
             return;
         }
         self.spawner
-            .spawn(tone_ranges_task(
-                [(2000, 1000), (3000, 1000), (2000, 1000)].into_iter(),
-            ))
+            .spawn(tone_ranges_task(&[
+                (2000, 1000),
+                (3000, 1000),
+                (2000, 1000),
+            ]))
             .ok();
     }
 
@@ -226,9 +229,7 @@ impl<'d> Buzzer<'d> {
             return;
         }
         self.spawner
-            .spawn(tone_ranges_task(
-                [(500, 1000), (300, 1000), (100, 1000)].into_iter(),
-            ))
+            .spawn(tone_ranges_task(&[(500, 1000), (300, 1000), (100, 1000)]))
             .ok();
     }
 
@@ -287,21 +288,17 @@ async fn tone_task(frequency: u32, duration: u64) {
 }
 
 #[embassy_executor::task]
-async fn tone_range_task(
-    freq_range: impl Iterator<Item = u32> + 'static,
-    duration: u64,
-    step: usize,
-) {
+async fn tone_range_task(freq_range: Vec<u32>, duration: u64) {
     let buzzer = unsafe { BUZZER.assume_init_mut() };
-    for i in freq_range.step_by(step) {
+    for i in freq_range {
         buzzer.tone(i, duration).await;
     }
 }
 
 #[embassy_executor::task]
-async fn tone_ranges_task(range: impl Iterator<Item = (u32, u64)> + 'static) {
+async fn tone_ranges_task(range: &'static [(u32, u64)]) {
     let buzzer = unsafe { BUZZER.assume_init_mut() };
     for (freq, dur) in range {
-        buzzer.tone(freq, dur).await;
+        buzzer.tone(*freq, *dur).await;
     }
 }
