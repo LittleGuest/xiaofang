@@ -1,9 +1,9 @@
 #![doc = include_str!("../../rfcs/008_dodge_cube.md")]
 
-use crate::{ledc::LedControl, player::Player, App, Gd};
+use crate::{ledc::LedControl, player::Player, Ad, App, Point};
 use alloc::collections::LinkedList;
 use embassy_time::Timer;
-use embedded_graphics::{geometry::Point, pixelcolor::Rgb888, Pixel};
+use embedded_graphics::{pixelcolor::Rgb888, Pixel};
 
 #[derive(Debug)]
 pub struct DodgeCubeGame {
@@ -43,7 +43,7 @@ impl DodgeCubeGame {
 
     pub async fn run<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<'_, T>) {
         app.ledc.clear();
-        app.gd = Gd::default();
+        app.ad = Ad::default();
 
         loop {
             Timer::after_millis(self.waiting_time).await;
@@ -58,14 +58,14 @@ impl DodgeCubeGame {
                 Timer::after_millis(500).await;
                 break;
             }
-            app.gravity_direction();
-            self.r#move(&app.gd);
+            app.acc_direction();
+            self.r#move(&app.ad);
             // TODO: 移动音效,得分音效和画面效果,死亡音效
             self.draw(&mut app.ledc);
         }
     }
 
-    fn r#move(&mut self, _gd: &Gd) {}
+    fn r#move(&mut self, _gd: &Ad) {}
 
     fn calc_score(&mut self) {
         self.score += 1;

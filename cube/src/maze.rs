@@ -3,11 +3,10 @@
 use crate::{
     map::{Map, Vision},
     player::Player,
-    App, CubeRng, Gd, BUZZER, RNG,
+    Ad, App, CubeRng, Point, BUZZER, RNG,
 };
 use alloc::vec::Vec;
 use embassy_time::Timer;
-use embedded_graphics::geometry::Point;
 use embedded_graphics_core::{
     pixelcolor::{BinaryColor, Rgb888},
     prelude::{RgbColor, WebColors},
@@ -65,7 +64,7 @@ impl Maze {
 
     pub async fn run<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<'_, T>) {
         app.ledc.clear();
-        app.gd = Gd::default();
+        app.ad = Ad::default();
 
         loop {
             Timer::after_millis(self.waiting_time).await;
@@ -76,14 +75,14 @@ impl Maze {
                 Timer::after_millis(3000).await;
                 break;
             }
-            app.gravity_direction();
+            app.acc_direction();
 
             if !self.hit_wall(app) {
-                let moved = self.player.r#move(app.gd);
+                let moved = self.player.r#move(app.ad);
                 if moved {
                     unsafe { BUZZER.assume_init_mut().maze_move().await };
                     // 玩家移动之后视野数据改变
-                    self.vision.update(app.gd, &self.map.map);
+                    self.vision.update(app.ad, &self.map.map);
                     // 游戏结束
                     if self.player.pos.x == self.map.epos.x && self.player.pos.y == self.map.epos.y
                     {
@@ -130,7 +129,7 @@ impl Maze {
 
     /// 检测是否撞墙
     fn hit_wall<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) -> bool {
-        let Point { x, y } = self.player.next_pos(app.gd);
+        let Point { x, y } = self.player.next_pos(app.ad);
         let overlapping = x <= 0
             || y <= 0
             || x >= self.map.map.width as i32 - 1

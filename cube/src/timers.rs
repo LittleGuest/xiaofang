@@ -30,7 +30,7 @@ impl core::default::Default for Timers {
 impl Timers {
     fn init<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
         app.ledc.clear();
-        app.gravity_direction();
+        app.acc_direction();
         app.ledc.write_pixels(self.pixels());
 
         // Timer::after_millis(1000).await;

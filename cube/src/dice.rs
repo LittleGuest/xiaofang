@@ -95,7 +95,9 @@ impl Dice {
             }
             Timer::after_millis(800).await;
 
-            // TODO: 推出骰子模式
+            if app.quit() {
+                break;
+            }
         }
     }
 }

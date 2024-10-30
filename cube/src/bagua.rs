@@ -132,7 +132,9 @@ impl BaGua {
             }
             Timer::after_millis(800).await;
 
-            // TODO: 退出占卦模式
+            if app.quit() {
+                break;
+            }
         }
     }
 }

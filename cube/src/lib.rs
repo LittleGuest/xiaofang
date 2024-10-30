@@ -1,7 +1,5 @@
 #![no_std]
 #![no_main]
-#![feature(extract_if)]
-#![allow(unused)]
 
 use crate::{dodge_cube::DodgeCubeGame, sokoban::Sokoban};
 use alloc::vec::Vec;
@@ -15,7 +13,7 @@ use embassy_executor::Spawner;
 use embassy_time::Timer;
 use embedded_graphics_core::pixelcolor::Rgb888;
 use embedded_storage::{ReadStorage, Storage};
-use esp_hal::{i2c::I2C, rng::Rng, Blocking};
+use esp_hal::{rng::Rng, Blocking};
 use esp_storage::FlashStorage;
 use face::Face;
 use ledc::LedControl;
@@ -48,12 +46,14 @@ pub mod snake;
 pub mod sokoban;
 pub mod timers;
 pub mod ui;
+pub mod wifi_ap;
 
-pub type CubeColor = Rgb888;
+pub type Color = Rgb888;
 pub static mut RNG: MaybeUninit<Rng> = MaybeUninit::uninit();
 pub static mut BUZZER: MaybeUninit<Buzzer> = MaybeUninit::uninit();
 pub static mut LEDCTL: MaybeUninit<LedControl> = MaybeUninit::uninit();
 
+/// 物体移动方向
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Direction {
     Up,
@@ -63,6 +63,7 @@ enum Direction {
 }
 
 impl Direction {
+    /// 反方向
     fn opposite(&self) -> Self {
         match self {
             Direction::Up => Self::Down,
@@ -73,37 +74,66 @@ impl Direction {
     }
 }
 
-/// 重力方向
+/// 加速度方向
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
-pub enum Gd {
+pub enum Ad {
     #[default]
     None,
-    Up,
+    Front,
     Right,
-    Down,
+    Back,
     Left,
+    Up,
+    Down,
 }
 
-impl core::fmt::Display for Gd {
+impl core::fmt::Display for Ad {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Gd::None => f.write_str("None"),
-            Gd::Up => f.write_str("Up"),
-            Gd::Right => f.write_str("Right"),
-            Gd::Down => f.write_str("Down"),
-            Gd::Left => f.write_str("Left"),
+            Ad::None => f.write_str("None"),
+            Ad::Front => f.write_str("Up"),
+            Ad::Right => f.write_str("Right"),
+            Ad::Back => f.write_str("Down"),
+            Ad::Left => f.write_str("Left"),
+            Ad::Up => f.write_str("Up"),
+            Ad::Down => f.write_str("Down"),
         }
     }
 }
 
-impl From<Direction> for Gd {
-    fn from(v: Direction) -> Self {
-        match v {
-            Direction::Up => Self::Up,
+impl From<Direction> for Ad {
+    fn from(d: Direction) -> Self {
+        match d {
+            Direction::Up => Self::Front,
             Direction::Right => Self::Right,
-            Direction::Down => Self::Down,
+            Direction::Down => Self::Back,
             Direction::Left => Self::Left,
         }
+    }
+}
+
+/// 坐标
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Point {
+    x: i32,
+    y: i32,
+}
+
+impl Point {
+    pub fn new(x: i32, y: i32) -> Self {
+        Self { x, y }
+    }
+}
+
+impl From<(i32, i32)> for Point {
+    fn from((x, y): (i32, i32)) -> Self {
+        Self { x, y }
+    }
+}
+
+impl From<Point> for embedded_graphics_core::geometry::Point {
+    fn from(p: Point) -> Self {
+        Self { x: p.x, y: p.y }
     }
 }
 
@@ -118,9 +148,9 @@ where
     ui_current_idx: i8,
     /// 表情
     face: Face,
-    gd: Gd,
+    ad: Ad,
 
-    mpu6050: Mpu6050<I2C<'d, T, Blocking>>,
+    mpu6050: Mpu6050<esp_hal::i2c::I2c<'d, T, Blocking>>,
     ledc: LedControl<'d>,
     spawner: Spawner,
 }
@@ -129,38 +159,52 @@ impl<'d, T> App<'d, T>
 where
     T: esp_hal::i2c::Instance,
 {
-    fn gravity_direction(&mut self) {
+    pub fn accel(&mut self) -> AccelF32 {
+        self.mpu6050.accel().unwrap().scaled(AccelFullScale::G2)
+    }
+
+    /// 加速度方向
+    pub fn acc_direction(&mut self) {
         let accel = self.accel();
         let ax = accel.x();
         let ay = accel.y();
+        let az = accel.z();
 
         let ax_abs = if ax <= 0.0 { 0.0 - ax } else { ax };
         let ay_abs = if ay <= 0.0 { 0.0 - ay } else { ay };
+        let az_abs = if az <= 0.0 { 0.0 - az } else { az };
         if ax_abs > 0.5 || ay_abs > 0.5 {
             if ax_abs > ay_abs {
                 if ax < -0.5 {
-                    self.gd = Gd::Right;
+                    self.ad = Ad::Right;
                 }
                 if ax > 0.5 {
-                    self.gd = Gd::Left;
+                    self.ad = Ad::Left;
                 }
             }
 
             if ax_abs < ay_abs {
                 if ay < -0.5 {
-                    self.gd = Gd::Up;
+                    self.ad = Ad::Front
                 }
                 if ay > 0.5 {
-                    self.gd = Gd::Down;
+                    self.ad = Ad::Back;
                 }
             }
+        } else if az_abs >= 1.0 {
+            self.ad = Ad::Down;
         } else {
-            self.gd = Gd::None;
+            self.ad = Ad::None;
         }
     }
 
+    /// 退出
+    pub fn quit(&self) -> bool {
+        Ad::Down.eq(&self.ad)
+    }
+
     pub fn new(
-        mpu6050: Mpu6050<I2C<'d, T, Blocking>>,
+        mpu6050: Mpu6050<esp_hal::i2c::I2c<'d, T, Blocking>>,
         mut ledc: LedControl<'d>,
         spawner: Spawner,
     ) -> Self {
@@ -170,16 +214,12 @@ where
             uis: Ui::uis().into(),
             ui_current_idx: 0,
             face: Face::default(),
-            gd: Gd::default(),
+            ad: Ad::default(),
 
             mpu6050,
             ledc,
             spawner,
         }
-    }
-
-    pub fn accel(&mut self) -> AccelF32 {
-        self.mpu6050.accel().unwrap().scaled(AccelFullScale::G2)
     }
 
     pub async fn run(mut self) -> ! {
@@ -196,17 +236,17 @@ where
         loop {
             Timer::after_millis(500).await;
 
-            self.gravity_direction();
+            self.acc_direction();
 
-            if self.gd == Gd::default() {
+            if self.ad == Ad::default() {
                 self.ledc
                     .write_bytes(self.uis[self.ui_current_idx as usize].ui());
                 continue;
             }
 
-            match self.gd {
+            match self.ad {
                 // 向上进入对应的界面
-                Gd::Up => {
+                Ad::Front => {
                     unsafe { BUZZER.assume_init_mut().menu_confirm().await };
                     match self.uis[self.ui_current_idx as usize] {
                         Ui::Timer => Timers::default().run(&mut self).await,
@@ -247,7 +287,7 @@ where
                         Ui::Sound => unsafe { BUZZER.assume_init_mut().change() },
                     }
                 }
-                Gd::Right => {
+                Ad::Right => {
                     self.ui_current_idx += 1;
                     if self.ui_current_idx >= self.uis.len() as i8 {
                         self.ui_current_idx = 0;
@@ -256,7 +296,7 @@ where
                         .write_bytes(self.uis[self.ui_current_idx as usize].ui());
                     unsafe { BUZZER.assume_init_mut().menu_select().await };
                 }
-                Gd::Left => {
+                Ad::Left => {
                     self.ui_current_idx -= 1;
                     if self.ui_current_idx < 0 {
                         self.ui_current_idx = self.uis.len() as i8 - 1;

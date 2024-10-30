@@ -3,11 +3,10 @@
 use crate::{
     map::{Map, MapCell, Vision},
     player::Player,
-    App, Gd, BUZZER,
+    Ad, App, Point, BUZZER,
 };
 use alloc::vec::Vec;
 use embassy_time::Timer;
-use embedded_graphics::geometry::Point;
 use embedded_graphics_core::{
     pixelcolor::{BinaryColor, Rgb888},
     prelude::WebColors,
@@ -51,7 +50,7 @@ impl Sokoban {
         let map = SokobanMap::from_xsb(xsb);
         let width = map.map.width;
         let height = map.map.height;
-        let player = Player::new(map.player.0 .0);
+        let player = Player::new((map.player.0 .0.x, map.player.0 .0.y).into());
         let mut vision = Vision::new(width, height, player.pos);
         vision.update_data(&map.map);
         Sokoban {
@@ -65,7 +64,7 @@ impl Sokoban {
 
     pub async fn run<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<'_, T>) {
         app.ledc.clear();
-        app.gd = Gd::default();
+        app.ad = Ad::default();
 
         loop {
             Timer::after_millis(self.waiting_time).await;
@@ -77,18 +76,18 @@ impl Sokoban {
                 Timer::after_millis(500).await;
                 break;
             }
-            app.gravity_direction();
+            app.acc_direction();
 
             if !self.hit_wall(app) {
                 // 不撞墙，是否在推动箱子，能否推动箱子，能一起移动
                 let can_push = self.push_box(app);
                 if can_push {
-                    let moved = self.player.r#move(app.gd);
+                    let moved = self.player.r#move(app.ad);
                     if moved {
                         unsafe { BUZZER.assume_init_mut().sokoban_move().await };
                     }
                     // 玩家移动之后视野数据改变
-                    self.vision.update(app.gd, &self.map.map);
+                    self.vision.update(app.ad, &self.map.map);
                     self.game_over();
                 }
             }
@@ -98,19 +97,19 @@ impl Sokoban {
 
     /// 推动箱子
     fn push_box<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) -> bool {
-        let Point { x, y } = self.player.next_pos(app.gd);
+        let Point { x, y } = self.player.next_pos(app.ad);
         let boxs = self.map.boxs.clone();
         for (cp, ct) in self.map.boxs.iter_mut() {
             // 下一个位置是箱子且能推动则推箱子
             if TargetType::Box.eq(ct) && cp.0.x == x && cp.0.y == y {
                 // 再下一个位置
                 let mut boxp = cp.0;
-                match app.gd {
-                    Gd::None => {}
-                    Gd::Up => boxp.y -= 1,
-                    Gd::Right => boxp.x += 1,
-                    Gd::Down => boxp.y += 1,
-                    Gd::Left => boxp.x -= 1,
+                match app.ad {
+                    Ad::Front => boxp.y -= 1,
+                    Ad::Right => boxp.x += 1,
+                    Ad::Back => boxp.y += 1,
+                    Ad::Left => boxp.x -= 1,
+                    _ => {}
                 };
                 let is_box = boxs.iter().any(|m| {
                     matches!(m.1, TargetType::Box) && m.0 .0.x == boxp.x && m.0 .0.y == boxp.y
@@ -123,12 +122,12 @@ impl Sokoban {
                 }
 
                 // 推动箱子
-                match app.gd {
-                    Gd::None => {}
-                    Gd::Up => cp.0.y -= 1,
-                    Gd::Right => cp.0.x += 1,
-                    Gd::Down => cp.0.y += 1,
-                    Gd::Left => cp.0.x -= 1,
+                match app.ad {
+                    Ad::Front => cp.0.y -= 1,
+                    Ad::Right => cp.0.x += 1,
+                    Ad::Back => cp.0.y += 1,
+                    Ad::Left => cp.0.x -= 1,
+                    _ => {}
                 };
             }
         }
@@ -174,7 +173,7 @@ impl Sokoban {
         let pp = {
             let pp = self.player.pos;
             // 黄色表示玩家在目标点上
-            let color = if goals.contains(&pp) {
+            let color = if goals.contains(&pp.into()) {
                 Rgb888::CSS_YELLOW
             } else {
                 self.player.color
@@ -187,7 +186,7 @@ impl Sokoban {
 
     /// 检测是否撞墙
     fn hit_wall<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) -> bool {
-        let Point { x, y } = self.player.next_pos(app.gd);
+        let Point { x, y } = self.player.next_pos(app.ad);
         let overlapping = x <= 0
             || y <= 0
             || x >= self.map.map.width as i32 - 1

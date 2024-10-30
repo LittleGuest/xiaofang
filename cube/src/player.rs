@@ -1,6 +1,5 @@
-use crate::Gd;
+use crate::{Ad, Color, Point};
 use embedded_graphics::{
-    geometry::Point,
     pixelcolor::{Rgb888, WebColors},
     Pixel,
 };
@@ -9,12 +8,12 @@ use embedded_graphics::{
 #[derive(Debug, Clone, Copy)]
 pub struct Player {
     pub pos: Point,
-    pub color: Rgb888,
+    pub color: Color,
 }
 
 impl From<Player> for Pixel<Rgb888> {
     fn from(p: Player) -> Self {
-        Pixel(p.pos, p.color)
+        Pixel(p.pos.into(), p.color)
     }
 }
 
@@ -28,21 +27,21 @@ impl Player {
     }
 
     /// 获取玩家的下一个位置
-    pub fn next_pos(&self, gd: Gd) -> Point {
+    pub fn next_pos(&self, gd: Ad) -> Point {
         let mut pos = self.pos;
         match gd {
-            Gd::None => {}
-            Gd::Up => pos.y -= 1,
-            Gd::Right => pos.x += 1,
-            Gd::Down => pos.y += 1,
-            Gd::Left => pos.x -= 1,
+            Ad::Front => pos.y -= 1,
+            Ad::Right => pos.x += 1,
+            Ad::Back => pos.y += 1,
+            Ad::Left => pos.x -= 1,
+            _ => {}
         };
         pos
     }
 
     /// 玩家移动
-    pub fn r#move(&mut self, gd: Gd) -> bool {
+    pub fn r#move(&mut self, gd: Ad) -> bool {
         self.pos = self.next_pos(gd);
-        gd != Gd::None
+        gd != Ad::None
     }
 }

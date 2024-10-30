@@ -1,138 +1,117 @@
 #![no_std]
 #![no_main]
-#![feature(core_intrinsics)]
-#![allow(unused)]
 
-use alloc::vec::Vec;
-use core::f32::consts::PI;
-use core::intrinsics::roundf32;
-use core::mem::MaybeUninit;
 use cube::buzzer::Buzzer;
 use cube::ledc::LedControl;
 use embassy_executor::Spawner;
-use embassy_time::Timer;
+use embassy_futures::select::{select, Either};
+use embassy_net::{Ipv4Address, Ipv4Cidr, Stack, StackResources, StaticConfigV4};
+use embassy_time::{Duration, Ticker, Timer};
 use esp_backtrace as _;
-use esp_hal::analog::adc::{Adc, AdcConfig, Attenuation};
-use esp_hal::clock::Clocks;
-use esp_hal::delay::Delay;
 use esp_hal::gpio::Io;
+use esp_hal::i2c::I2c;
 use esp_hal::ledc::{LSGlobalClkSource, Ledc};
-use esp_hal::peripherals::ADC1;
+use esp_hal::prelude::*;
+use esp_hal::rng::Rng;
 use esp_hal::spi::master::Spi;
 use esp_hal::spi::SpiMode;
-use esp_hal::system::SystemControl;
+use esp_hal::timer::systimer::{SystemTimer, Target};
 use esp_hal::timer::timg::TimerGroup;
-use esp_hal::{clock::ClockControl, i2c::I2C, peripherals::Peripherals, prelude::*};
-use log::info;
+use esp_wifi::esp_now::{PeerInfo, BROADCAST_ADDRESS};
+use esp_wifi::wifi::{
+    AccessPointConfiguration, ClientConfiguration, Configuration, WifiApDevice, WifiController,
+    WifiDevice, WifiEvent, WifiStaDevice, WifiState,
+};
+use esp_wifi::EspWifiInitFor;
+use log::{error, info};
 use mpu6050_dmp::address::Address;
 use mpu6050_dmp::sensor::Mpu6050;
-use spectrum_analyzer::scaling::{self, divide_by_N_sqrt};
-use spectrum_analyzer::windows::{hamming_window, hann_window};
-use spectrum_analyzer::{samples_fft_to_spectrum, FrequencyLimit};
 
 extern crate alloc;
 
-#[global_allocator]
-static ALLOCATOR: esp_alloc::EspHeap = esp_alloc::EspHeap::empty();
-
-fn init_heap() {
-    const HEAP_SIZE: usize = 32 * 1024;
-    static mut HEAP: MaybeUninit<[u8; HEAP_SIZE]> = MaybeUninit::uninit();
-
-    unsafe {
-        ALLOCATOR.init(HEAP.as_mut_ptr() as *mut u8, HEAP_SIZE);
-    }
+// When you are okay with using a nightly compiler it's better to use https://docs.rs/static_cell/2.1.0/static_cell/macro.make_static.html
+macro_rules! mk_static {
+    ($t:ty,$val:expr) => {{
+        static STATIC_CELL: static_cell::StaticCell<$t> = static_cell::StaticCell::new();
+        #[deny(unused_attributes)]
+        let x = STATIC_CELL.uninit().write(($val));
+        x
+    }};
 }
 
-pub static mut CLOCKS: MaybeUninit<Clocks> = MaybeUninit::uninit();
-
-#[main]
+#[esp_hal_embassy::main]
 async fn main(spawner: Spawner) {
-    let peripherals = Peripherals::take();
-    let system = SystemControl::new(peripherals.SYSTEM);
-    let clocks = ClockControl::max(system.clock_control).freeze();
-
-    unsafe { CLOCKS.write(clocks) };
-    let clocks = unsafe { CLOCKS.assume_init_ref() };
-
-    let mut delay = Delay::new(clocks);
-    init_heap();
     esp_println::logger::init_logger_from_env();
-    let _timer = esp_hal::timer::systimer::SystemTimer::new(peripherals.SYSTIMER).alarm0;
-    let tg0 = TimerGroup::new_async(peripherals.TIMG0, clocks);
 
-    // let _init = esp_wifi::initialize(
-    //     esp_wifi::EspWifiInitFor::Wifi,
-    //     timer,
-    //     esp_hal::rng::Rng::new(peripherals.RNG),
-    //     peripherals.RADIO_CLK,
-    //     &clocks,
-    // )
-    // .unwrap();
-
+    let peripherals = esp_hal::init({
+        let mut config = esp_hal::Config::default();
+        config.cpu_clock = CpuClock::max();
+        config
+    });
     let io = Io::new(peripherals.GPIO, peripherals.IO_MUX);
+    let systimer = SystemTimer::new(peripherals.SYSTIMER).split::<Target>();
+    let rng = Rng::new(peripherals.RNG);
+    let timg0 = TimerGroup::new(peripherals.TIMG0);
 
-    esp_hal_embassy::init(clocks, tg0);
+    esp_alloc::heap_allocator!(72 * 1024);
 
-    let mut ledc = Ledc::new(peripherals.LEDC, clocks);
+    unsafe { cube::RNG.write(rng) };
+
+    let init = esp_wifi::init(
+        EspWifiInitFor::Wifi,
+        timg0.timer0,
+        rng,
+        peripherals.RADIO_CLK,
+    )
+    .unwrap();
+
+    let wifi = peripherals.WIFI;
+    let mut esp_now = esp_wifi::esp_now::EspNow::new(&init, wifi).unwrap();
+    info!("esp-now version {}", esp_now.get_version().unwrap());
+
+    esp_hal_embassy::init(systimer.alarm0);
+
+    let mut ticker = Ticker::every(Duration::from_secs(5));
+    loop {
+        let status = esp_now.send_async(&BROADCAST_ADDRESS, b"0123456789").await;
+        info!("Send broadcast status: {:?}", status);
+
+        let r = esp_now.receive_async().await;
+        info!("Received {:?}", r);
+        if r.info.dst_address == BROADCAST_ADDRESS {
+            if !esp_now.peer_exists(&r.info.src_address) {
+                esp_now
+                    .add_peer(PeerInfo {
+                        peer_address: r.info.src_address,
+                        lmk: None,
+                        channel: None,
+                        encrypt: false,
+                    })
+                    .unwrap();
+            }
+            let status = esp_now.send_async(&r.info.src_address, b"Hello Peer").await;
+            info!("Send hello to peer status: {:?}", status);
+        }
+    }
+
+    let mut ledc = Ledc::new(peripherals.LEDC);
     ledc.set_global_slow_clock(LSGlobalClkSource::APBClk);
     let buzzer = Buzzer::new(io.pins.gpio11, ledc, spawner);
     unsafe { cube::BUZZER.write(buzzer) };
 
-    let i2c = I2C::new(
+    let i2c = I2c::new(
         peripherals.I2C0,
         io.pins.gpio4,
         io.pins.gpio5,
         1_000u32.kHz(),
-        clocks,
-        None,
     );
     let mut mpu = Mpu6050::new(i2c, Address::default()).unwrap();
-    mpu.initialize_dmp(&mut delay).unwrap();
+    mpu.initialize_dmp(&mut embassy_time::Delay).unwrap();
 
-    let spi =
-        Spi::new(peripherals.SPI2, 3_u32.MHz(), SpiMode::Mode0, clocks).with_mosi(io.pins.gpio3);
+    let spi = Spi::new(peripherals.SPI2, 3_u32.MHz(), SpiMode::Mode0).with_mosi(io.pins.gpio3);
     let ledc = LedControl::new(spi);
 
-    let rng = esp_hal::rng::Rng::new(peripherals.RNG);
-    unsafe { cube::RNG.write(rng) };
-
-    let mut adc1_config = AdcConfig::new();
-    let mut adc1_pin = adc1_config.enable_pin(io.pins.gpio1, Attenuation::Attenuation11dB);
-    let mut adc1 = Adc::new(peripherals.ADC1, adc1_config);
-
-    let mut samples = alloc::vec![0.0;64];
-    loop {
-        for sample in samples.iter_mut().take(64) {
-            let data = nb::block!(adc1.read_oneshot(&mut adc1_pin)).unwrap();
-            // *sample = data as f32 * 1.1 / 4095.;
-            *sample = data as f32;
-            Timer::after_micros(250).await;
-        }
-        // let hann_window = hamming_window(&samples);
-        let hann_window = hann_window(&samples);
-        let spectrum_hann_window = samples_fft_to_spectrum(
-            &hann_window,
-            8000,
-            // FrequencyLimit::Min(80.),
-            FrequencyLimit::All,
-            Some(&scaling::divide_by_N_sqrt),
-        )
-        .unwrap();
-
-        info!("ADC reading: {samples:?}");
-
-        // 频率（Hz），频谱中的频率值（幅度）
-        for (fr, fr_val) in spectrum_hann_window.data().iter() {
-            let maped = map_range(fr.val(), 80., 4000., 0., 8.);
-            info!("{fr}Hz => {fr_val}, maped: {maped},round: {:?}", unsafe {
-                roundf32(maped)
-            });
-        }
-        Timer::after_millis(1000).await;
-    }
-
-    // cube::App::new(mpu, ledc, spawner).run().await;
+    cube::App::new(mpu, ledc, spawner).run().await;
 }
 
 fn map_range(x: f32, in_min: f32, in_max: f32, out_min: f32, out_max: f32) -> f32 {

@@ -1,8 +1,8 @@
 use core::fmt::Display;
 
-use crate::Gd;
+use crate::{Ad, Point};
 use alloc::vec::Vec;
-use embedded_graphics::{geometry::Point, pixelcolor::Rgb888, Pixel};
+use embedded_graphics::{pixelcolor::Rgb888, Pixel};
 
 pub type MapCell<T = ()> = (Pixel<Rgb888>, T);
 
@@ -79,20 +79,20 @@ impl<const W: usize, const H: usize, T: Clone> Vision<W, H, T> {
     }
 
     /// 视野下一个位置
-    pub fn next_pos(&self, gd: Gd) -> Point {
+    pub fn next_pos(&self, gd: Ad) -> Point {
         let mut pos = self.pos;
         match gd {
-            Gd::None => {}
-            Gd::Up => pos.y -= 1,
-            Gd::Right => pos.x += 1,
-            Gd::Down => pos.y += 1,
-            Gd::Left => pos.x -= 1,
+            Ad::Front => pos.y -= 1,
+            Ad::Right => pos.x += 1,
+            Ad::Back => pos.y += 1,
+            Ad::Left => pos.x -= 1,
+            _ => {}
         };
         pos
     }
 
     /// 移动视野
-    pub fn r#move(&mut self, gd: Gd) {
+    pub fn r#move(&mut self, gd: Ad) {
         self.pos = self.next_pos(gd);
     }
 
@@ -126,7 +126,7 @@ impl<const W: usize, const H: usize, T: Clone> Vision<W, H, T> {
     }
 
     /// 改变视野位置
-    pub fn update(&mut self, gd: Gd, map: &Map<T>) {
+    pub fn update(&mut self, gd: Ad, map: &Map<T>) {
         let Point { x, y } = self.next_pos(gd);
         let overlapping = {
             if map.width < W && map.height < H {

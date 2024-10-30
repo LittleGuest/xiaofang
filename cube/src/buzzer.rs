@@ -8,9 +8,7 @@ use esp_hal::{
         channel::{self, config::PinConfig},
         timer, Ledc, LowSpeed,
     },
-    prelude::{
-        _esp_hal_ledc_channel_ChannelIFace, _esp_hal_ledc_timer_TimerIFace, _fugit_RateExtU32,
-    },
+    prelude::*,
 };
 
 /// 蜂鸣器

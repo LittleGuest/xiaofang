@@ -1,6 +1,6 @@
 #![doc = include_str!("../../rfcs/006_cube_man.md")]
 
-use crate::{App, Gd, RNG};
+use crate::{Ad, App, RNG};
 use alloc::{collections::VecDeque, vec::Vec};
 use cube_rand::CubeRng;
 use embassy_time::Timer;
@@ -49,7 +49,7 @@ impl CubeManGame {
 
     pub async fn run<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<'_, T>) {
         app.ledc.clear();
-        app.gd = Gd::default();
+        app.ad = Ad::default();
 
         loop {
             if self.game_over {
@@ -62,7 +62,7 @@ impl CubeManGame {
                 Timer::after_millis(500).await;
                 break;
             }
-            app.gravity_direction();
+            app.acc_direction();
             {
                 self.floors.pop_front();
                 self.floors.push_back(self.floor_gen.floor(self.depth));
@@ -157,7 +157,7 @@ impl CubeManGame {
                 Timer::after_millis(*t).await;
             }
             FloorType::Conveyor(cd) => {
-                if app.gd == Gd::Left || app.gd == Gd::Right {
+                if app.ad == Ad::Left || app.ad == Ad::Right {
                     return;
                 }
                 match cd {
@@ -385,9 +385,9 @@ impl CubeMan {
 
     fn next_pos<T: esp_hal::i2c::Instance>(&self, app: &mut App<T>) -> Point {
         let mut pos = self.pos;
-        match app.gd {
-            Gd::Right => pos.x += 1,
-            Gd::Left => pos.x -= 1,
+        match app.ad {
+            Ad::Right => pos.x += 1,
+            Ad::Left => pos.x -= 1,
             _ => {}
         };
         pos

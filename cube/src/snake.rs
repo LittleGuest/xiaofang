@@ -1,6 +1,6 @@
 #![doc = include_str!("../../rfcs/003_snake.md")]
 
-use crate::{App, Direction, Gd, BUZZER, RNG};
+use crate::{Ad, App, Direction, BUZZER, RNG};
 use alloc::collections::LinkedList;
 use cube_rand::CubeRng;
 use embassy_time::Timer;
@@ -50,7 +50,7 @@ impl SnakeGame {
 
     pub async fn run<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<'_, T>) {
         app.ledc.clear();
-        app.gd = Gd::default();
+        app.ad = Ad::default();
 
         loop {
             Timer::after_millis(self.waiting_time).await;
@@ -66,21 +66,21 @@ impl SnakeGame {
                 Timer::after_millis(500).await;
                 break;
             }
-            app.gravity_direction();
+            app.acc_direction();
 
-            self.r#move(&app.gd).await;
+            self.r#move(&app.ad).await;
 
             self.draw(app);
         }
     }
 
-    async fn r#move(&mut self, gd: &Gd) {
+    async fn r#move(&mut self, gd: &Ad) {
         match gd {
-            Gd::None => {}
-            Gd::Up => self.snake.set_direction(Direction::Up),
-            Gd::Right => self.snake.set_direction(Direction::Right),
-            Gd::Down => self.snake.set_direction(Direction::Down),
-            Gd::Left => self.snake.set_direction(Direction::Left),
+            Ad::Front => self.snake.set_direction(Direction::Up),
+            Ad::Right => self.snake.set_direction(Direction::Right),
+            Ad::Back => self.snake.set_direction(Direction::Down),
+            Ad::Left => self.snake.set_direction(Direction::Left),
+            _ => {}
         };
 
         let next_head = self.snake.next_head_pos();
