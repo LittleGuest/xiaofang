@@ -71,28 +71,28 @@ async fn main(spawner: Spawner) {
 
     esp_hal_embassy::init(systimer.alarm0);
 
-    let mut ticker = Ticker::every(Duration::from_secs(5));
-    loop {
-        let status = esp_now.send_async(&BROADCAST_ADDRESS, b"0123456789").await;
-        info!("Send broadcast status: {:?}", status);
-
-        let r = esp_now.receive_async().await;
-        info!("Received {:?}", r);
-        if r.info.dst_address == BROADCAST_ADDRESS {
-            if !esp_now.peer_exists(&r.info.src_address) {
-                esp_now
-                    .add_peer(PeerInfo {
-                        peer_address: r.info.src_address,
-                        lmk: None,
-                        channel: None,
-                        encrypt: false,
-                    })
-                    .unwrap();
-            }
-            let status = esp_now.send_async(&r.info.src_address, b"Hello Peer").await;
-            info!("Send hello to peer status: {:?}", status);
-        }
-    }
+    // let mut ticker = Ticker::every(Duration::from_secs(5));
+    // loop {
+    //     let status = esp_now.send_async(&BROADCAST_ADDRESS, b"0123456789").await;
+    //     info!("Send broadcast status: {:?}", status);
+    //
+    //     let r = esp_now.receive_async().await;
+    //     info!("Received {:?}", r);
+    //     if r.info.dst_address == BROADCAST_ADDRESS {
+    //         if !esp_now.peer_exists(&r.info.src_address) {
+    //             esp_now
+    //                 .add_peer(PeerInfo {
+    //                     peer_address: r.info.src_address,
+    //                     lmk: None,
+    //                     channel: None,
+    //                     encrypt: false,
+    //                 })
+    //                 .unwrap();
+    //         }
+    //         let status = esp_now.send_async(&r.info.src_address, b"Hello Peer").await;
+    //         info!("Send hello to peer status: {:?}", status);
+    //     }
+    // }
 
     let mut ledc = Ledc::new(peripherals.LEDC);
     ledc.set_global_slow_clock(LSGlobalClkSource::APBClk);

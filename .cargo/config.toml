@@ -1,5 +1,6 @@
 [target.riscv32imc-unknown-none-elf]
 runner = "espflash flash --monitor"
+# runner = "wokwi-server --chip esp32c3 --id 413175440833513473"
 
 
 [env]

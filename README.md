@@ -58,6 +58,16 @@
 | GND | GND   |      |
 | D0  | -     |      |
 
+## wokwi仿真
+
+```bash
+cargo install wokwi-server
+
+cargo b -r
+
+wokwi-server --chip esp32c3 --id 413175440833513473 target/riscv32imc-unknown-none-elf/release/cube
+```
+
 ## 三方库
 
 ## 硬件相关
