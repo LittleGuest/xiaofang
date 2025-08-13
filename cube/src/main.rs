@@ -4,28 +4,18 @@
 use cube::buzzer::Buzzer;
 use cube::ledc::LedControl;
 use embassy_executor::Spawner;
-use embassy_futures::select::{select, Either};
-use embassy_net::{Ipv4Address, Ipv4Cidr, Stack, StackResources, StaticConfigV4};
-use embassy_time::{Duration, Ticker, Timer};
-use esp_backtrace as _;
-use esp_hal::gpio::Io;
-use esp_hal::i2c::I2c;
+use esp_hal::i2c::master::I2c;
 use esp_hal::ledc::{LSGlobalClkSource, Ledc};
-use esp_hal::prelude::*;
-use esp_hal::rng::Rng;
 use esp_hal::spi::master::Spi;
-use esp_hal::spi::SpiMode;
-use esp_hal::timer::systimer::{SystemTimer, Target};
+use esp_hal::timer::systimer::SystemTimer;
 use esp_hal::timer::timg::TimerGroup;
-use esp_wifi::esp_now::{PeerInfo, BROADCAST_ADDRESS};
-use esp_wifi::wifi::{
-    AccessPointConfiguration, ClientConfiguration, Configuration, WifiApDevice, WifiController,
-    WifiDevice, WifiEvent, WifiStaDevice, WifiState,
-};
-use esp_wifi::EspWifiInitFor;
-use log::{error, info};
+use esp_hal::{i2c, spi};
 use mpu6050_dmp::address::Address;
 use mpu6050_dmp::sensor::Mpu6050;
+
+use defmt::info;
+use esp_hal::clock::CpuClock;
+use esp_println as _;
 
 extern crate alloc;
 
@@ -39,76 +29,53 @@ macro_rules! mk_static {
     }};
 }
 
+#[panic_handler]
+fn panic(_: &core::panic::PanicInfo) -> ! {
+    loop {}
+}
+
 #[esp_hal_embassy::main]
 async fn main(spawner: Spawner) {
-    esp_println::logger::init_logger_from_env();
+    info!("初始化 hal");
+    let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
+    let peripherals = esp_hal::init(config);
+    info!("初始化 hal 完成");
 
-    let peripherals = esp_hal::init({
-        let mut config = esp_hal::Config::default();
-        config.cpu_clock = CpuClock::max();
-        config
-    });
-    let io = Io::new(peripherals.GPIO, peripherals.IO_MUX);
-    let systimer = SystemTimer::new(peripherals.SYSTIMER).split::<Target>();
-    let rng = Rng::new(peripherals.RNG);
-    let timg0 = TimerGroup::new(peripherals.TIMG0);
+    esp_alloc::heap_allocator!(size: 64 * 1024);
+    // COEX needs more RAM - so we've added some more
+    esp_alloc::heap_allocator!(#[unsafe(link_section = ".dram2_uninit")] size: 64 * 1024);
 
-    esp_alloc::heap_allocator!(72 * 1024);
+    let timer0 = SystemTimer::new(peripherals.SYSTIMER);
+    info!("初始化 embassy");
+    esp_hal_embassy::init(timer0.alarm0);
+    info!("初始化 embassy 完成");
+
+    let rng = esp_hal::rng::Rng::new(peripherals.RNG);
+    let timer1 = TimerGroup::new(peripherals.TIMG0);
+    let wifi_init =
+        esp_wifi::init(timer1.timer0, rng).expect("Failed to initialize WIFI/BLE controller");
+    let (mut _wifi_controller, _interfaces) = esp_wifi::wifi::new(&wifi_init, peripherals.WIFI)
+        .expect("Failed to initialize WIFI controller");
+    // let _connector = BleConnector::new(&wifi_init, peripherals.BT);
 
     unsafe { cube::RNG.write(rng) };
 
-    let init = esp_wifi::init(
-        EspWifiInitFor::Wifi,
-        timg0.timer0,
-        rng,
-        peripherals.RADIO_CLK,
-    )
-    .unwrap();
-
-    let wifi = peripherals.WIFI;
-    let mut esp_now = esp_wifi::esp_now::EspNow::new(&init, wifi).unwrap();
-    info!("esp-now version {}", esp_now.get_version().unwrap());
-
-    esp_hal_embassy::init(systimer.alarm0);
-
-    // let mut ticker = Ticker::every(Duration::from_secs(5));
-    // loop {
-    //     let status = esp_now.send_async(&BROADCAST_ADDRESS, b"0123456789").await;
-    //     info!("Send broadcast status: {:?}", status);
-    //
-    //     let r = esp_now.receive_async().await;
-    //     info!("Received {:?}", r);
-    //     if r.info.dst_address == BROADCAST_ADDRESS {
-    //         if !esp_now.peer_exists(&r.info.src_address) {
-    //             esp_now
-    //                 .add_peer(PeerInfo {
-    //                     peer_address: r.info.src_address,
-    //                     lmk: None,
-    //                     channel: None,
-    //                     encrypt: false,
-    //                 })
-    //                 .unwrap();
-    //         }
-    //         let status = esp_now.send_async(&r.info.src_address, b"Hello Peer").await;
-    //         info!("Send hello to peer status: {:?}", status);
-    //     }
-    // }
-
     let mut ledc = Ledc::new(peripherals.LEDC);
     ledc.set_global_slow_clock(LSGlobalClkSource::APBClk);
-    let buzzer = Buzzer::new(io.pins.gpio11, ledc, spawner);
+    let buzzer = Buzzer::new(peripherals.GPIO11, ledc, spawner);
     unsafe { cube::BUZZER.write(buzzer) };
 
-    let i2c = I2c::new(
-        peripherals.I2C0,
-        io.pins.gpio4,
-        io.pins.gpio5,
-        1_000u32.kHz(),
-    );
+    let i2c = I2c::new(peripherals.I2C0, i2c::master::Config::default())
+        .unwrap()
+        .with_sda(peripherals.GPIO4)
+        .with_scl(peripherals.GPIO5);
+
     let mut mpu = Mpu6050::new(i2c, Address::default()).unwrap();
     mpu.initialize_dmp(&mut embassy_time::Delay).unwrap();
 
-    let spi = Spi::new(peripherals.SPI2, 3_u32.MHz(), SpiMode::Mode0).with_mosi(io.pins.gpio3);
+    let spi = Spi::new(peripherals.SPI2, spi::master::Config::default())
+        .unwrap()
+        .with_mosi(peripherals.GPIO3);
     let ledc = LedControl::new(spi);
 
     cube::App::new(mpu, ledc, spawner).run().await;

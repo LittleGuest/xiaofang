@@ -62,7 +62,7 @@ impl Maze {
         maze
     }
 
-    pub async fn run<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<'_, T>) {
+    pub async fn run(&mut self, app: &mut App<'_>) {
         app.ledc.clear();
         app.ad = Ad::default();
 
@@ -94,7 +94,7 @@ impl Maze {
         }
     }
 
-    fn draw<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    fn draw(&mut self, app: &mut App<'_>) {
         app.ledc.clear_with_color(BinaryColor::Off.into());
         let vp = self.vision.pos;
         let mut pixels = self
@@ -128,7 +128,7 @@ impl Maze {
     }
 
     /// 检测是否撞墙
-    fn hit_wall<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) -> bool {
+    fn hit_wall(&mut self, app: &mut App<'_>) -> bool {
         let Point { x, y } = self.player.next_pos(app.ad);
         let overlapping = x <= 0
             || y <= 0
@@ -166,7 +166,6 @@ impl MazeMap {
         let maze = maze::Maze::new(width, height)
             .unwrap()
             .generate(&mut unsafe { CubeRng(RNG.assume_init_mut().random() as u64) });
-        log::info!("\n{maze}\n");
         let mut map = Map::new(width, height);
         for y in 0..height {
             for x in 0..width {

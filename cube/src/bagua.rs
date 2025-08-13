@@ -117,7 +117,7 @@ impl BaGua {
         Self::bagua(num)
     }
 
-    pub async fn run<T: esp_hal::i2c::Instance>(app: &mut App<'_, T>) {
+    pub async fn run(app: &mut App<'_>) {
         app.ledc.clear();
         loop {
             let accel = app.accel();

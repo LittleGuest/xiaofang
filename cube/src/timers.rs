@@ -28,7 +28,7 @@ impl core::default::Default for Timers {
 }
 
 impl Timers {
-    fn init<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    fn init(&mut self, app: &mut App<'_>) {
         app.ledc.clear();
         app.acc_direction();
         app.ledc.write_pixels(self.pixels());
@@ -60,7 +60,7 @@ impl Timers {
         self.pixels.iter().position(|p| p == last)
     }
 
-    pub async fn run<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<'_, T>) {
+    pub async fn run(&mut self, app: &mut App<'_>) {
         self.init(app);
 
         let mut rxs = vec![0, 1, 2, 3, 4, 5, 6, 7];
@@ -102,7 +102,7 @@ impl TimerPixel {
     }
 
     /// 闪烁一下选中的像素,
-    async fn blink<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<'_, T>) {
+    async fn blink(&mut self, app: &mut App<'_>) {
         for _ in 0..3 {
             self.pixel.1 = BinaryColor::from(self.pixel.1).invert().into();
             app.ledc.write_pixel(self.pixel);
@@ -112,7 +112,7 @@ impl TimerPixel {
     }
 
     /// 执行像素的下落过程
-    async fn r#move<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<'_, T>) {
+    async fn r#move(&mut self, app: &mut App<'_>) {
         self.pixel.1 = BinaryColor::On.into();
         self.pixel.0.y += 4;
         Timer::after_millis(500).await;

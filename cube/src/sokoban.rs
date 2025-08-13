@@ -62,7 +62,7 @@ impl Sokoban {
         }
     }
 
-    pub async fn run<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<'_, T>) {
+    pub async fn run(&mut self, app: &mut App<'_>) {
         app.ledc.clear();
         app.ad = Ad::default();
 
@@ -96,7 +96,7 @@ impl Sokoban {
     }
 
     /// 推动箱子
-    fn push_box<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) -> bool {
+    fn push_box(&mut self, app: &mut App<'_>) -> bool {
         let Point { x, y } = self.player.next_pos(app.ad);
         let boxs = self.map.boxs.clone();
         for (cp, ct) in self.map.boxs.iter_mut() {
@@ -141,7 +141,7 @@ impl Sokoban {
         self.game_over = all;
     }
 
-    fn draw<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    fn draw(&mut self, app: &mut App<'_>) {
         app.ledc.clear_with_color(BinaryColor::Off.into());
         let vp = self.vision.pos;
         let mut pixels = self
@@ -185,7 +185,7 @@ impl Sokoban {
     }
 
     /// 检测是否撞墙
-    fn hit_wall<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) -> bool {
+    fn hit_wall(&mut self, app: &mut App<'_>) -> bool {
         let Point { x, y } = self.player.next_pos(app.ad);
         let overlapping = x <= 0
             || y <= 0

@@ -4,7 +4,7 @@
 
 use core::ops::{Bound, RangeBounds};
 
-use rand_core::{Error, RngCore};
+use rand_core::RngCore;
 
 pub struct CubeRng(pub u64);
 
@@ -71,10 +71,5 @@ impl RngCore for CubeRng {
 
     fn fill_bytes(&mut self, dest: &mut [u8]) {
         self.fill_bytes(dest);
-    }
-
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Error> {
-        self.fill_bytes(dest);
-        Ok(())
     }
 }

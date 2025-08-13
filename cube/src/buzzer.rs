@@ -3,25 +3,24 @@ use alloc::vec::Vec;
 use cube_rand::CubeRng;
 use embassy_executor::Spawner;
 use embassy_time::Timer;
-use esp_hal::{
-    gpio::GpioPin,
-    ledc::{
-        channel::{self, config::PinConfig},
-        timer, Ledc, LowSpeed,
-    },
-    prelude::*,
-};
+use esp_hal::gpio::{Level, Output, OutputConfig};
+use esp_hal::ledc::channel::config::PinConfig;
+use esp_hal::ledc::channel::ChannelIFace as _;
+use esp_hal::ledc::timer::TimerIFace;
+use esp_hal::ledc::{channel, timer, Ledc, LowSpeed};
+use esp_hal::peripherals::GPIO11;
+use esp_hal::time::Rate;
 
 /// 蜂鸣器
 pub struct Buzzer<'d> {
     pub open: bool,
-    pin: GpioPin<11>,
+    pin: GPIO11<'d>,
     ledc: Ledc<'d>,
     spawner: Spawner,
 }
 
 impl<'d> Buzzer<'d> {
-    pub fn new(pin: GpioPin<11>, ledc: Ledc<'d>, spawner: Spawner) -> Self {
+    pub fn new(pin: GPIO11<'d>, ledc: Ledc<'d>, spawner: Spawner) -> Self {
         Self {
             open: true,
             ledc,
@@ -45,18 +44,18 @@ impl<'d> Buzzer<'d> {
     /// FIXME: esp_hal::ledc 暂时仅支持固定频率输出，不同频率需要重新配置定时器和通道
     async fn drive(&mut self, frequency: u32, duty_pct: u8) {
         // 定时器配置:指定 PWM 信号的频率和占空比分辨率
-        let mut lstimer0 = self.ledc.get_timer::<LowSpeed>(timer::Number::Timer0);
+        let mut lstimer0 = self.ledc.timer::<LowSpeed>(timer::Number::Timer0);
         lstimer0
             .configure(timer::config::Config {
                 duty: timer::config::Duty::Duty13Bit,
                 clock_source: timer::LSClockSource::APBClk,
-                frequency: frequency.Hz(),
+                frequency: Rate::from_hz(frequency),
             })
             .unwrap();
         // 通道配置:绑定定时器和输出 PWM 信号的 GPIO
-        let mut channel0 = self
-            .ledc
-            .get_channel(channel::Number::Channel0, &mut self.pin);
+        let config = OutputConfig::default();
+        let led = Output::new(self.pin.reborrow(), Level::High, config);
+        let mut channel0 = self.ledc.channel(channel::Number::Channel0, led);
         channel0
             .configure(channel::config::Config {
                 timer: &lstimer0,

@@ -80,7 +80,7 @@ impl Dice {
         Self::dice(num)
     }
 
-    pub async fn run<T: esp_hal::i2c::Instance>(&self, app: &mut App<'_, T>) {
+    pub async fn run(&self, app: &mut App<'_>) {
         app.ledc.clear();
         loop {
             let accel = app.accel();

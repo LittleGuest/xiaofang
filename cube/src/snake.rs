@@ -48,7 +48,7 @@ impl SnakeGame {
         }
     }
 
-    pub async fn run<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<'_, T>) {
+    pub async fn run(&mut self, app: &mut App<'_>) {
         app.ledc.clear();
         app.ad = Ad::default();
 
@@ -112,7 +112,7 @@ impl SnakeGame {
             || next_head.y >= self.height
     }
 
-    pub fn draw<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    pub fn draw(&mut self, app: &mut App<'_>) {
         let ledc = &mut app.ledc;
         ledc.clear();
         // 蛇身

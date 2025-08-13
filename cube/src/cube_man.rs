@@ -47,7 +47,7 @@ impl CubeManGame {
         }
     }
 
-    pub async fn run<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<'_, T>) {
+    pub async fn run(&mut self, app: &mut App<'_>) {
         app.ledc.clear();
         app.ad = Ad::default();
 
@@ -81,12 +81,11 @@ impl CubeManGame {
         }
     }
 
-    async fn r#move<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<'_, T>) {
+    async fn r#move(&mut self, app: &mut App<'_>) {
         let np = self.man.next_pos(app);
         if self.outside(&np) {
             self.game_over = true;
         } else if self.hit_wall(&np) {
-            return;
         } else {
             self.man.r#move(app);
             // 如果下面是楼梯,在停在楼梯上
@@ -132,11 +131,7 @@ impl CubeManGame {
     }
 
     /// 在楼梯上的移动
-    async fn moving_on_floor<T: esp_hal::i2c::Instance>(
-        &mut self,
-        floor: &Floor,
-        app: &mut App<'_, T>,
-    ) {
+    async fn moving_on_floor(&mut self, floor: &Floor, app: &mut App<'_>) {
         match &floor.r#type {
             FloorType::Normal => {}
             FloorType::Fragile(t) => {
@@ -179,7 +174,7 @@ impl CubeManGame {
         };
     }
 
-    pub fn draw<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    pub fn draw(&mut self, app: &mut App<'_>) {
         app.ledc.clear_with_color(BinaryColor::Off.into());
         // 楼梯
         app.ledc.write_pixels(
@@ -383,7 +378,7 @@ impl CubeMan {
         }
     }
 
-    fn next_pos<T: esp_hal::i2c::Instance>(&self, app: &mut App<T>) -> Point {
+    fn next_pos(&self, app: &mut App<'_>) -> Point {
         let mut pos = self.pos;
         match app.ad {
             Ad::Right => pos.x += 1,
@@ -393,7 +388,7 @@ impl CubeMan {
         pos
     }
 
-    fn r#move<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<T>) {
+    fn r#move(&mut self, app: &mut App<'_>) {
         self.pos = self.next_pos(app);
     }
 

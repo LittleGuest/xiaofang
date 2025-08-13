@@ -41,7 +41,7 @@ impl DodgeCubeGame {
         }
     }
 
-    pub async fn run<T: esp_hal::i2c::Instance>(&mut self, app: &mut App<'_, T>) {
+    pub async fn run(&mut self, app: &mut App<'_>) {
         app.ledc.clear();
         app.ad = Ad::default();
 

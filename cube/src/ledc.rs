@@ -1,11 +1,8 @@
 use crate::mapping;
+use defmt::error;
 use embedded_graphics::{pixelcolor::*, prelude::*};
-use esp_hal::{
-    peripherals::SPI2,
-    spi::{master::Spi, FullDuplexMode},
-};
+use esp_hal::{spi::master::Spi, Blocking};
 use heapless::Vec;
-use log::error;
 use smart_leds_matrix::{
     layout::{invert_axis::NoInvert, Rectangular},
     SmartLedMatrix,
@@ -16,11 +13,11 @@ use ws2812_spi::Ws2812;
 const NUM_LEDS: usize = 64;
 
 pub struct LedControl<'d> {
-    matrix: SmartLedMatrix<Ws2812<Spi<'d, SPI2, FullDuplexMode>>, Rectangular<NoInvert>, NUM_LEDS>,
+    matrix: SmartLedMatrix<Ws2812<Spi<'d, Blocking>>, Rectangular<NoInvert>, NUM_LEDS>,
 }
 
 impl<'d> LedControl<'d> {
-    pub fn new(spi: Spi<'d, SPI2, FullDuplexMode>) -> Self {
+    pub fn new(spi: Spi<'d, Blocking>) -> Self {
         let ws = Ws2812::new(spi);
         let mut matrix = SmartLedMatrix::<_, _, { 8 * 8 }>::new(ws, Rectangular::new(8, 8));
         matrix.set_brightness(1);
@@ -46,7 +43,7 @@ impl<'d> LedControl<'d> {
     /// 清屏
     pub fn clear_with_color(&mut self, color: Rgb888) {
         if let Err(e) = self.matrix.clear(color) {
-            error!("clear_with_color error {e:?}");
+            error!("clear_with_color error {:?}", e);
         }
     }
 
@@ -71,10 +68,10 @@ impl<'d> LedControl<'d> {
         I: IntoIterator<Item = Pixel<Rgb888>>,
     {
         if let Err(e) = self.matrix.draw_iter(pixels) {
-            error!("write pixels error: {e:?}");
+            error!("write pixels error: {:?}", e);
         }
         if let Err(e) = self.matrix.flush() {
-            error!("write pixels error: {e:?}");
+            error!("write pixels error: {:?}", e);
         }
     }
 

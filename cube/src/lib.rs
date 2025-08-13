@@ -13,11 +13,10 @@ use embassy_executor::Spawner;
 use embassy_time::Timer;
 use embedded_graphics_core::pixelcolor::Rgb888;
 use embedded_storage::{ReadStorage, Storage};
-use esp_hal::{rng::Rng, Blocking};
+use esp_hal::{i2c::master::I2c, rng::Rng, Blocking};
 use esp_storage::FlashStorage;
 use face::Face;
 use ledc::LedControl;
-use log::info;
 use maze::Maze;
 use mpu6050_dmp::{
     accel::{AccelF32, AccelFullScale},
@@ -138,10 +137,7 @@ impl From<Point> for embedded_graphics_core::geometry::Point {
 }
 
 /// 小方
-pub struct App<'d, T>
-where
-    T: esp_hal::i2c::Instance,
-{
+pub struct App<'d> {
     /// 界面
     uis: Vec<Ui>,
     /// 当前界面的索引
@@ -150,15 +146,12 @@ where
     face: Face,
     ad: Ad,
 
-    mpu6050: Mpu6050<esp_hal::i2c::I2c<'d, T, Blocking>>,
+    mpu6050: Mpu6050<I2c<'d, Blocking>>,
     ledc: LedControl<'d>,
     spawner: Spawner,
 }
 
-impl<'d, T> App<'d, T>
-where
-    T: esp_hal::i2c::Instance,
-{
+impl<'d> App<'d> {
     pub fn accel(&mut self) -> AccelF32 {
         self.mpu6050.accel().unwrap().scaled(AccelFullScale::G2)
     }
@@ -204,7 +197,7 @@ where
     }
 
     pub fn new(
-        mpu6050: Mpu6050<esp_hal::i2c::I2c<'d, T, Blocking>>,
+        mpu6050: Mpu6050<I2c<'d, Blocking>>,
         mut ledc: LedControl<'d>,
         spawner: Spawner,
     ) -> Self {
@@ -227,11 +220,11 @@ where
         let mut flash = FlashStorage::new();
         let mut flash_data = [0u8; 8];
         flash.read(flash_addr, &mut flash_data).ok();
-        info!(
-            "Read flash data from {:x}:  {:02x?}",
-            flash_addr,
-            &flash_data[..8]
-        );
+        // info!(
+        //     "Read flash data from {:x}:  {:02x?}",
+        //     flash_addr,
+        //     &flash_data[..8]
+        // );
 
         loop {
             Timer::after_millis(500).await;

@@ -130,12 +130,12 @@ impl Maze {
     }
 
     /// Iterate over the maze data column-wise.
-    pub fn iter(&self) -> Iter<Vec<u8>> {
+    pub fn iter(&self) -> Iter<'_, Vec<u8>> {
         self.data.iter()
     }
 
     /// Mutably iterate over the maze data column-wise.
-    pub fn iter_mut(&mut self) -> IterMut<Vec<u8>> {
+    pub fn iter_mut(&mut self) -> IterMut<'_, Vec<u8>> {
         self.data.iter_mut()
     }
 
