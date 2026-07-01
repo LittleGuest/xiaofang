@@ -1,5 +1,18 @@
 #![no_std]
 #![no_main]
+#![deny(
+    clippy::mem_forget,
+    reason = "mem::forget is generally not safe to do with esp_hal types, especially those \
+    holding buffers for the duration of a data transfer."
+)]
+#![deny(clippy::large_stack_frames)]
+
+use esp_hal::clock::CpuClock;
+use esp_hal::timer::timg::TimerGroup;
+use esp_radio::ble::controller::BleConnector;
+
+use defmt::error;
+use esp_println as _;
 
 use cube::buzzer::Buzzer;
 use cube::ledc::LedControl;
@@ -7,58 +20,51 @@ use embassy_executor::Spawner;
 use esp_hal::i2c::master::I2c;
 use esp_hal::ledc::{LSGlobalClkSource, Ledc};
 use esp_hal::spi::master::Spi;
-use esp_hal::timer::systimer::SystemTimer;
-use esp_hal::timer::timg::TimerGroup;
 use esp_hal::{i2c, spi};
+use esp_storage::FlashStorage;
 use mpu6050_dmp::address::Address;
 use mpu6050_dmp::sensor::Mpu6050;
 
-use defmt::info;
-use esp_hal::clock::CpuClock;
-use esp_println as _;
-
-extern crate alloc;
-
-// When you are okay with using a nightly compiler it's better to use https://docs.rs/static_cell/2.1.0/static_cell/macro.make_static.html
-macro_rules! mk_static {
-    ($t:ty,$val:expr) => {{
-        static STATIC_CELL: static_cell::StaticCell<$t> = static_cell::StaticCell::new();
-        #[deny(unused_attributes)]
-        let x = STATIC_CELL.uninit().write(($val));
-        x
-    }};
-}
-
 #[panic_handler]
-fn panic(_: &core::panic::PanicInfo) -> ! {
+fn panic(panic_info: &core::panic::PanicInfo) -> ! {
+    error!("{}", panic_info);
     loop {}
 }
 
-#[esp_hal_embassy::main]
+extern crate alloc;
+
+// This creates a default app-descriptor required by the esp-idf bootloader.
+// For more information see: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/app_image_format.html#application-description>
+esp_bootloader_esp_idf::esp_app_desc!();
+
+#[allow(
+    clippy::large_stack_frames,
+    reason = "it's not unusual to allocate larger buffers etc. in main"
+)]
+#[esp_rtos::main]
 async fn main(spawner: Spawner) {
-    info!("初始化 hal");
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
-    info!("初始化 hal 完成");
 
-    esp_alloc::heap_allocator!(size: 64 * 1024);
+    esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 66320);
     // COEX needs more RAM - so we've added some more
-    esp_alloc::heap_allocator!(#[unsafe(link_section = ".dram2_uninit")] size: 64 * 1024);
+    esp_alloc::heap_allocator!(size: 64 * 1024);
 
-    let timer0 = SystemTimer::new(peripherals.SYSTIMER);
-    info!("初始化 embassy");
-    esp_hal_embassy::init(timer0.alarm0);
-    info!("初始化 embassy 完成");
+    // let timer0 = SystemTimer::new(peripherals.SYSTIMER);
+    // info!("初始化 embassy");
+    // // FIXME : esp_hal_embassy::init(timer0.alarm0);
+    // info!("初始化 embassy 完成");
 
-    let rng = esp_hal::rng::Rng::new(peripherals.RNG);
-    let timer1 = TimerGroup::new(peripherals.TIMG0);
-    let wifi_init =
-        esp_wifi::init(timer1.timer0, rng).expect("Failed to initialize WIFI/BLE controller");
-    let (mut _wifi_controller, _interfaces) = esp_wifi::wifi::new(&wifi_init, peripherals.WIFI)
-        .expect("Failed to initialize WIFI controller");
-    // let _connector = BleConnector::new(&wifi_init, peripherals.BT);
-
+    let rng = esp_hal::rng::Rng::new();
     unsafe { cube::RNG.write(rng) };
+    let timg0 = TimerGroup::new(peripherals.TIMG0);
+    let sw_interrupt =
+        esp_hal::interrupt::software::SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
+    esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
+    let (mut _wifi_controller, _interfaces) =
+        esp_radio::wifi::new(peripherals.WIFI, Default::default())
+            .expect("Failed to initialize Wi-Fi controller");
+    let _connector = BleConnector::new(peripherals.BT, Default::default());
 
     let mut ledc = Ledc::new(peripherals.LEDC);
     ledc.set_global_slow_clock(LSGlobalClkSource::APBClk);
@@ -77,8 +83,8 @@ async fn main(spawner: Spawner) {
         .unwrap()
         .with_mosi(peripherals.GPIO3);
     let ledc = LedControl::new(spi);
-
-    cube::App::new(mpu, ledc, spawner).run().await;
+    let flash = FlashStorage::new(peripherals.FLASH);
+    cube::App::new(mpu, ledc, spawner, flash).run().await;
 }
 
 fn map_range(x: f32, in_min: f32, in_max: f32, out_min: f32, out_max: f32) -> f32 {

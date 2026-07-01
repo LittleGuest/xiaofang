@@ -3,8 +3,7 @@ use alloc::vec::Vec;
 use cube_rand::CubeRng;
 use embassy_executor::Spawner;
 use embassy_time::Timer;
-use esp_hal::gpio::{Level, Output, OutputConfig};
-use esp_hal::ledc::channel::config::PinConfig;
+use esp_hal::gpio::{DriveMode, Level, Output, OutputConfig};
 use esp_hal::ledc::channel::ChannelIFace as _;
 use esp_hal::ledc::timer::TimerIFace;
 use esp_hal::ledc::{channel, timer, Ledc, LowSpeed};
@@ -60,7 +59,7 @@ impl<'d> Buzzer<'d> {
             .configure(channel::config::Config {
                 timer: &lstimer0,
                 duty_pct,
-                pin_config: PinConfig::PushPull,
+                drive_mode: DriveMode::PushPull,
             })
             .unwrap();
     }
@@ -86,7 +85,7 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        self.spawner.spawn(tone_task(1500, 300)).ok();
+        self.spawner.spawn(tone_task(1500, 300).unwrap());
     }
 
     /// 菜单确认音效
@@ -95,7 +94,7 @@ impl<'d> Buzzer<'d> {
             return;
         }
         let range = (400..2000).step_by(100).collect::<Vec<u32>>();
-        self.spawner.spawn(tone_range_task(range, 50)).ok();
+        self.spawner.spawn(tone_range_task(range, 50).unwrap());
     }
 
     /// 菜单进入音效
@@ -104,7 +103,7 @@ impl<'d> Buzzer<'d> {
             return;
         }
         let range = (200..=3000).rev().step_by(200).collect::<Vec<u32>>();
-        self.spawner.spawn(tone_range_task(range, 50)).ok();
+        self.spawner.spawn(tone_range_task(range, 50).unwrap());
     }
 
     /// 八卦音效
@@ -113,7 +112,7 @@ impl<'d> Buzzer<'d> {
             return;
         }
         let range = (200..=3000).rev().step_by(200).collect::<Vec<u32>>();
-        self.spawner.spawn(tone_range_task(range, 50)).ok();
+        self.spawner.spawn(tone_range_task(range, 50).unwrap());
     }
 
     /// 骰子音效
@@ -122,7 +121,7 @@ impl<'d> Buzzer<'d> {
             return;
         }
         let range = (200..=3000).rev().step_by(400).collect::<Vec<u32>>();
-        self.spawner.spawn(tone_range_task(range, 50)).ok();
+        self.spawner.spawn(tone_range_task(range, 50).unwrap());
     }
 
     /// 迷宫移动音效
@@ -130,7 +129,7 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        self.spawner.spawn(tone_task(5000, 100)).ok();
+        self.spawner.spawn(tone_task(5000, 100).unwrap());
     }
 
     /// 迷宫结束音效
@@ -138,35 +137,27 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        self.spawner
-            .spawn(tone_ranges_task(&[
-                (6000, 100),
-                (6000, 100),
-                (6000, 100),
-                (6000, 150),
-            ]))
-            .ok();
+        self.spawner.spawn(
+            tone_ranges_task(&[(6000, 100), (6000, 100), (6000, 100), (6000, 150)]).unwrap(),
+        );
     }
 
     /// 休眠开启音效
     pub async fn hibernation(&mut self) {
         self.spawner
-            .spawn(tone_ranges_task(&[(8000, 100), (2500, 100), (800, 100)]))
-            .ok();
+            .spawn(tone_ranges_task(&[(8000, 100), (2500, 100), (800, 100)]).unwrap());
     }
 
     /// 开机音效
     pub async fn power_on(&mut self) {
         self.spawner
-            .spawn(tone_ranges_task(&[(800, 200), (2500, 100), (8000, 200)]))
-            .ok();
+            .spawn(tone_ranges_task(&[(800, 200), (2500, 100), (8000, 200)]).unwrap());
     }
 
     /// 唤醒音效
     pub async fn wakeup(&mut self) {
         self.spawner
-            .spawn(tone_ranges_task(&[(1500, 200), (8000, 200)]))
-            .ok();
+            .spawn(tone_ranges_task(&[(1500, 200), (8000, 200)]).unwrap());
     }
 
     /// 沙漏像素闪烁音效
@@ -174,7 +165,7 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        self.spawner.spawn(tone_task(8000, 100)).ok();
+        self.spawner.spawn(tone_task(8000, 100).unwrap());
     }
 
     /// 沙漏像素反弹音效
@@ -182,7 +173,7 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        self.spawner.spawn(tone_task(4000, 100)).ok();
+        self.spawner.spawn(tone_task(4000, 100).unwrap());
     }
 
     /// 沙漏结束音效
@@ -190,14 +181,9 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        self.spawner
-            .spawn(tone_ranges_task(&[
-                (6000, 100),
-                (6000, 100),
-                (6000, 100),
-                (6000, 150),
-            ]))
-            .ok();
+        self.spawner.spawn(
+            tone_ranges_task(&[(6000, 100), (6000, 100), (6000, 100), (6000, 150)]).unwrap(),
+        );
     }
 
     /// 贪吃蛇移动音效
@@ -205,7 +191,7 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        self.spawner.spawn(tone_task(5000, 100)).ok();
+        self.spawner.spawn(tone_task(5000, 100).unwrap());
     }
 
     /// 贪吃蛇得分音效
@@ -214,12 +200,7 @@ impl<'d> Buzzer<'d> {
             return;
         }
         self.spawner
-            .spawn(tone_ranges_task(&[
-                (2000, 1000),
-                (3000, 1000),
-                (2000, 1000),
-            ]))
-            .ok();
+            .spawn(tone_ranges_task(&[(2000, 1000), (3000, 1000), (2000, 1000)]).unwrap());
     }
 
     /// 贪吃蛇死亡音效
@@ -228,8 +209,7 @@ impl<'d> Buzzer<'d> {
             return;
         }
         self.spawner
-            .spawn(tone_ranges_task(&[(500, 1000), (300, 1000), (100, 1000)]))
-            .ok();
+            .spawn(tone_ranges_task(&[(500, 1000), (300, 1000), (100, 1000)]).unwrap());
     }
 
     /// 推箱子移动音效
@@ -237,7 +217,7 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        self.spawner.spawn(tone_task(5000, 100)).ok();
+        self.spawner.spawn(tone_task(5000, 100).unwrap());
     }
 
     /// 休眠音效
@@ -245,7 +225,7 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        self.spawner.spawn(tone_task(6000, 100)).ok();
+        self.spawner.spawn(tone_task(6000, 100).unwrap());
     }
 
     /// 休眠音效2
@@ -253,14 +233,15 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        self.spawner
-            .spawn(tone_task(
+        self.spawner.spawn(
+            tone_task(
                 unsafe {
                     CubeRng(RNG.assume_init_mut().random() as u64).random_range(3000..=9000) as u32
                 },
                 100,
-            ))
-            .ok();
+            )
+            .unwrap(),
+        );
     }
 
     /// 眨眼音效
@@ -268,7 +249,7 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        self.spawner.spawn(tone_task(8000, 100)).ok();
+        self.spawner.spawn(tone_task(8000, 100).unwrap());
     }
 
     /// 眨眼音效2
@@ -276,7 +257,7 @@ impl<'d> Buzzer<'d> {
         if !self.open {
             return;
         }
-        self.spawner.spawn(tone_task(5000, 100)).ok();
+        self.spawner.spawn(tone_task(5000, 100).unwrap());
     }
 }
 

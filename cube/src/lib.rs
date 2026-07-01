@@ -149,6 +149,7 @@ pub struct App<'d> {
     mpu6050: Mpu6050<I2c<'d, Blocking>>,
     ledc: LedControl<'d>,
     spawner: Spawner,
+    flash: FlashStorage<'d>,
 }
 
 impl<'d> App<'d> {
@@ -200,6 +201,7 @@ impl<'d> App<'d> {
         mpu6050: Mpu6050<I2c<'d, Blocking>>,
         mut ledc: LedControl<'d>,
         spawner: Spawner,
+        flash: FlashStorage<'d>,
     ) -> Self {
         ledc.set_brightness(0x01);
 
@@ -212,14 +214,14 @@ impl<'d> App<'d> {
             mpu6050,
             ledc,
             spawner,
+            flash,
         }
     }
 
     pub async fn run(mut self) -> ! {
         let flash_addr = 0x9100;
-        let mut flash = FlashStorage::new();
         let mut flash_data = [0u8; 8];
-        flash.read(flash_addr, &mut flash_data).ok();
+        self.flash.read(flash_addr, &mut flash_data).ok();
         // info!(
         //     "Read flash data from {:x}:  {:02x?}",
         //     flash_addr,
@@ -254,7 +256,7 @@ impl<'d> App<'d> {
                             snake.run(&mut self).await;
                             // 游戏结束将最高分再次写入flash
                             flash_data[0x00] = snake.highest;
-                            flash.write(flash_addr, &flash_data).ok();
+                            self.flash.write(flash_addr, &flash_data).ok();
                         }
                         Ui::BaGua => BaGua::run(&mut self).await,
                         Ui::Maze => {
@@ -273,7 +275,7 @@ impl<'d> App<'d> {
                             cm.run(&mut self).await;
                             // 游戏结束将最高分再次写入flash
                             flash_data[0x01] = cm.highest;
-                            flash.write(flash_addr, &flash_data).ok();
+                            self.flash.write(flash_addr, &flash_data).ok();
                         }
                         Ui::Sokoban => Sokoban::new().run(&mut self).await,
                         Ui::DodgeCube => DodgeCubeGame::new().run(&mut self).await,

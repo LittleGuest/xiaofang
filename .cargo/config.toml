@@ -1,16 +1,17 @@
 [target.riscv32imc-unknown-none-elf]
 runner = "espflash flash --monitor --chip esp32c3 --log-format defmt"
-# runner = "wokwi-server --chip esp32c3 --id 413175440833513473"
-
 
 [env]
-DEFMT_LOG="info"
+DEFMT_LOG = "info"
 
 [build]
 rustflags = [
   # Required to obtain backtraces (e.g. when using the "esp-backtrace" crate.)
   # NOTE: May negatively impact performance of produced code
-  "-C", "force-frame-pointers",
+  "-C",
+  "force-frame-pointers",
+  "-Z",
+  "stack-protector=all",
 ]
 
 target = "riscv32imc-unknown-none-elf"
