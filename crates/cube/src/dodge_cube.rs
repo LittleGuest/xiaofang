@@ -1,4 +1,4 @@
-#![doc = include_str!("../../rfcs/008_dodge_cube.md")]
+#![doc = include_str!("../../../rfcs/008_dodge_cube.md")]
 
 use crate::{ledc::LedControl, player::Player, Ad, App, Point};
 use alloc::collections::LinkedList;

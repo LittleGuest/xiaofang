@@ -6,7 +6,7 @@ use embassy_time::Timer;
 use esp_hal::gpio::{DriveMode, Level, Output, OutputConfig};
 use esp_hal::ledc::channel::ChannelIFace as _;
 use esp_hal::ledc::timer::TimerIFace;
-use esp_hal::ledc::{channel, timer, Ledc, LowSpeed};
+use esp_hal::ledc::{Ledc, LowSpeed, channel, timer};
 use esp_hal::peripherals::GPIO11;
 use esp_hal::time::Rate;
 

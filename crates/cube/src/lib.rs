@@ -5,7 +5,7 @@ use crate::{dodge_cube::DodgeCubeGame, sokoban::Sokoban};
 use alloc::vec::Vec;
 use bagua::BaGua;
 use buzzer::Buzzer;
-use core::mem::MaybeUninit;
+use core::{mem::MaybeUninit, sync::atomic::AtomicUsize};
 use cube_man::CubeManGame;
 use cube_rand::CubeRng;
 use dice::Dice;
@@ -13,7 +13,7 @@ use embassy_executor::Spawner;
 use embassy_time::Timer;
 use embedded_graphics_core::pixelcolor::Rgb888;
 use embedded_storage::{ReadStorage, Storage};
-use esp_hal::{i2c::master::I2c, rng::Rng, Blocking};
+use esp_hal::{Blocking, i2c::master::I2c, rng::Rng};
 use esp_storage::FlashStorage;
 use face::Face;
 use ledc::LedControl;
@@ -23,6 +23,7 @@ use mpu6050_dmp::{
     sensor::Mpu6050,
 };
 use snake::SnakeGame;
+use static_cell::{ConstStaticCell, StaticCell};
 use timers::Timers;
 use ui::Ui;
 
@@ -146,10 +147,14 @@ pub struct App<'d> {
     face: Face,
     ad: Ad,
 
+    rng: Rng,
+    buzzer: Buzzer<'d>,
+
     mpu6050: Mpu6050<I2c<'d, Blocking>>,
     ledc: LedControl<'d>,
-    spawner: Spawner,
     flash: FlashStorage<'d>,
+
+    spawner: Spawner,
 }
 
 impl<'d> App<'d> {
@@ -202,6 +207,8 @@ impl<'d> App<'d> {
         mut ledc: LedControl<'d>,
         spawner: Spawner,
         flash: FlashStorage<'d>,
+        rng: Rng,
+        buzzer: Buzzer<'d>,
     ) -> Self {
         ledc.set_brightness(0x01);
 
@@ -213,8 +220,11 @@ impl<'d> App<'d> {
 
             mpu6050,
             ledc,
-            spawner,
             flash,
+            rng,
+            buzzer,
+
+            spawner,
         }
     }
 
@@ -242,7 +252,7 @@ impl<'d> App<'d> {
             match self.ad {
                 // 向上进入对应的界面
                 Ad::Front => {
-                    unsafe { BUZZER.assume_init_mut().menu_confirm().await };
+                    self.buzzer.menu_confirm().await;
                     match self.uis[self.ui_current_idx as usize] {
                         Ui::Timer => Timers::default().run(&mut self).await,
                         Ui::MusicSpectrum => {
@@ -260,9 +270,7 @@ impl<'d> App<'d> {
                         }
                         Ui::BaGua => BaGua::run(&mut self).await,
                         Ui::Maze => {
-                            let mut cr = unsafe {
-                                CubeRng(RNG.assume_init_mut().random() as u64).random_range(19..=33)
-                            };
+                            let mut cr = CubeRng(self.rng.random() as u64).random_range(19..=33);
                             if cr % 2 == 0 {
                                 cr += 1;
                             }
@@ -279,7 +287,7 @@ impl<'d> App<'d> {
                         }
                         Ui::Sokoban => Sokoban::new().run(&mut self).await,
                         Ui::DodgeCube => DodgeCubeGame::new().run(&mut self).await,
-                        Ui::Sound => unsafe { BUZZER.assume_init_mut().change() },
+                        Ui::Sound => self.buzzer.change(),
                     }
                 }
                 Ad::Right => {
@@ -289,7 +297,7 @@ impl<'d> App<'d> {
                     }
                     self.ledc
                         .write_bytes(self.uis[self.ui_current_idx as usize].ui());
-                    unsafe { BUZZER.assume_init_mut().menu_select().await };
+                    self.buzzer.menu_select().await;
                 }
                 Ad::Left => {
                     self.ui_current_idx -= 1;
@@ -298,7 +306,7 @@ impl<'d> App<'d> {
                     }
                     self.ledc
                         .write_bytes(self.uis[self.ui_current_idx as usize].ui());
-                    unsafe { BUZZER.assume_init_mut().menu_select().await };
+                    self.buzzer.menu_select().await;
                 }
                 _ => {
                     self.ledc

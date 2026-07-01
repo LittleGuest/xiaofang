@@ -1,4 +1,4 @@
-#![doc = include_str!("../../rfcs/002_dice.md")]
+#![doc = include_str!("../../../rfcs/002_dice.md")]
 
 use crate::{App, CubeRng, BUZZER, RNG};
 use embassy_time::Timer;

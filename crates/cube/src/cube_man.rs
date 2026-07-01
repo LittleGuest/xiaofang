@@ -1,4 +1,4 @@
-#![doc = include_str!("../../rfcs/006_cube_man.md")]
+#![doc = include_str!("../../../rfcs/006_cube_man.md")]
 
 use crate::{Ad, App, RNG};
 use alloc::{collections::VecDeque, vec::Vec};
@@ -6,9 +6,9 @@ use cube_rand::CubeRng;
 use embassy_time::Timer;
 use embedded_graphics::{geometry::Point, pixelcolor::RgbColor};
 use embedded_graphics_core::{
+    Pixel,
     pixelcolor::{BinaryColor, Rgb888},
     prelude::WebColors,
-    Pixel,
 };
 
 /// 是方块人就下一百层

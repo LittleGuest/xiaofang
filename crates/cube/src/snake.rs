@@ -1,4 +1,4 @@
-#![doc = include_str!("../../rfcs/003_snake.md")]
+#![doc = include_str!("../../../rfcs/003_snake.md")]
 
 use crate::{Ad, App, Direction, BUZZER, RNG};
 use alloc::collections::LinkedList;

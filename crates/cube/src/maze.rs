@@ -1,4 +1,4 @@
-#![doc = include_str!("../../rfcs/005_maze.md")]
+#![doc = include_str!("../../../rfcs/005_maze.md")]
 
 use crate::{
     map::{Map, Vision},

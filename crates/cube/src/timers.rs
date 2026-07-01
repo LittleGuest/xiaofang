@@ -1,4 +1,4 @@
-#![doc = include_str!("../../rfcs/004_timer.md")]
+#![doc = include_str!("../../../rfcs/004_timer.md")]
 
 use crate::{App, CubeRng, BUZZER, RNG};
 use alloc::vec::Vec;

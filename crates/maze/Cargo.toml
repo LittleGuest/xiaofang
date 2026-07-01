@@ -1,0 +1,10 @@
+[package]
+name = "maze"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+rand.workspace = true

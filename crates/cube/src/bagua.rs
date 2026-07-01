@@ -1,7 +1,8 @@
-#![doc = include_str!("../../rfcs/001_bagua.md")]
+#![doc = include_str!("../../../rfcs/001_bagua.md")]
 
-use crate::{App, CubeRng, BUZZER, RNG};
+use crate::{App, CubeRng};
 use embassy_time::Timer;
+use esp_hal::rng::Rng;
 
 /// 八卦
 #[derive(Debug)]
@@ -112,8 +113,8 @@ impl BaGua {
         }
     }
 
-    fn random() -> [u8; 8] {
-        let num = unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random(1, 9_u32) } as u8;
+    fn random(rng: Rng) -> [u8; 8] {
+        let num = CubeRng(rng.random() as u64).random(1, 9_u32) as u8;
         Self::bagua(num)
     }
 
@@ -127,8 +128,8 @@ impl BaGua {
                     .map(|_| (app.accel().x(), app.accel().y()))
                     .any(|(x, y)| !(-0.3..=0.3).contains(&x) && !(-0.3..=0.3).contains(&y))
             {
-                app.ledc.write_bytes(Self::random());
-                unsafe { BUZZER.assume_init_mut().bagua().await };
+                app.ledc.write_bytes(Self::random(app.rng));
+                app.buzzer.bagua().await;
             }
             Timer::after_millis(800).await;
 
