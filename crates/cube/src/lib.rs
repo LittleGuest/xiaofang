@@ -5,7 +5,7 @@ use crate::{dodge_cube::DodgeCubeGame, sokoban::Sokoban};
 use alloc::vec::Vec;
 use bagua::BaGua;
 use buzzer::Buzzer;
-use core::{mem::MaybeUninit, sync::atomic::AtomicUsize};
+use core::mem::MaybeUninit;
 use cube_man::CubeManGame;
 use cube_rand::CubeRng;
 use dice::Dice;
@@ -23,7 +23,6 @@ use mpu6050_dmp::{
     sensor::Mpu6050,
 };
 use snake::SnakeGame;
-use static_cell::{ConstStaticCell, StaticCell};
 use timers::Timers;
 use ui::Ui;
 
@@ -41,6 +40,7 @@ pub mod ledc;
 pub mod map;
 pub mod mapping;
 pub mod maze;
+pub mod music_spectrum;
 pub mod player;
 pub mod snake;
 pub mod sokoban;
@@ -49,9 +49,75 @@ pub mod ui;
 pub mod wifi_ap;
 
 pub type Color = Rgb888;
-pub static mut RNG: MaybeUninit<Rng> = MaybeUninit::uninit();
-pub static mut BUZZER: MaybeUninit<Buzzer> = MaybeUninit::uninit();
-pub static mut LEDCTL: MaybeUninit<LedControl> = MaybeUninit::uninit();
+
+/// 安全包装 `UnsafeCell` 以允许跨线程共享
+/// 等价于 nightly 的 `core::cell::SyncUnsafeCell`
+#[repr(transparent)]
+struct SyncUnsafeCell<T>(core::cell::UnsafeCell<T>);
+
+unsafe impl<T> Sync for SyncUnsafeCell<T> {}
+
+impl<T> SyncUnsafeCell<T> {
+    const fn new(value: T) -> Self {
+        Self(core::cell::UnsafeCell::new(value))
+    }
+
+    fn get(&self) -> *mut T {
+        self.0.get()
+    }
+}
+
+static RNG: SyncUnsafeCell<MaybeUninit<Rng>> = SyncUnsafeCell::new(MaybeUninit::uninit());
+static BUZZER: SyncUnsafeCell<MaybeUninit<Buzzer>> = SyncUnsafeCell::new(MaybeUninit::uninit());
+static LEDCTL: SyncUnsafeCell<MaybeUninit<LedControl>> = SyncUnsafeCell::new(MaybeUninit::uninit());
+
+/// 初始化 RNG 全局静态变量
+///
+/// # Safety
+/// 只能调用一次，且必须在任何 `rng()` 调用之前
+pub unsafe fn init_rng(val: Rng) {
+    unsafe { (*RNG.get()).write(val) };
+}
+
+/// 获取 RNG 的可变引用
+///
+/// # Safety
+/// 调用者必须确保 `init_rng` 已被调用，且不会同时存在其他引用
+pub unsafe fn rng() -> &'static mut Rng {
+    unsafe { (*RNG.get()).assume_init_mut() }
+}
+
+/// 初始化 BUZZER 全局静态变量
+///
+/// # Safety
+/// 只能调用一次，且必须在任何 `buzzer()` 调用之前
+pub unsafe fn init_buzzer(val: Buzzer<'static>) {
+    unsafe { (*BUZZER.get()).write(val) };
+}
+
+/// 获取 BUZZER 的可变引用
+///
+/// # Safety
+/// 调用者必须确保 `init_buzzer` 已被调用，且不会同时存在其他引用
+pub unsafe fn buzzer() -> &'static mut Buzzer<'static> {
+    unsafe { (*BUZZER.get()).assume_init_mut() }
+}
+
+/// 初始化 LEDCTL 全局静态变量
+///
+/// # Safety
+/// 只能调用一次，且必须在任何 `ledctl()` 调用之前
+pub unsafe fn init_ledctl(val: LedControl<'static>) {
+    unsafe { (*LEDCTL.get()).write(val) };
+}
+
+/// 获取 LEDCTL 的可变引用
+///
+/// # Safety
+/// 调用者必须确保 `init_ledctl` 已被调用，且不会同时存在其他引用
+pub unsafe fn ledctl() -> &'static mut LedControl<'static> {
+    unsafe { (*LEDCTL.get()).assume_init_mut() }
+}
 
 /// 物体移动方向
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -147,9 +213,6 @@ pub struct App<'d> {
     face: Face,
     ad: Ad,
 
-    rng: Rng,
-    buzzer: Buzzer<'d>,
-
     mpu6050: Mpu6050<I2c<'d, Blocking>>,
     ledc: LedControl<'d>,
     flash: FlashStorage<'d>,
@@ -162,44 +225,50 @@ impl<'d> App<'d> {
         self.mpu6050.accel().unwrap().scaled(AccelFullScale::G2)
     }
 
-    /// 加速度方向
+    /// 加速度方向（基于倾斜姿态）
     pub fn acc_direction(&mut self) {
         let accel = self.accel();
         let ax = accel.x();
         let ay = accel.y();
-        let az = accel.z();
 
-        let ax_abs = if ax <= 0.0 { 0.0 - ax } else { ax };
-        let ay_abs = if ay <= 0.0 { 0.0 - ay } else { ay };
-        let az_abs = if az <= 0.0 { 0.0 - az } else { az };
+        let ax_abs = ax.abs();
+        let ay_abs = ay.abs();
+
         if ax_abs > 0.5 || ay_abs > 0.5 {
-            if ax_abs > ay_abs {
-                if ax < -0.5 {
-                    self.ad = Ad::Right;
-                }
-                if ax > 0.5 {
-                    self.ad = Ad::Left;
-                }
+            if ax_abs >= ay_abs {
+                // X 轴倾斜更大，左右方向
+                self.ad = if ax < 0.0 { Ad::Right } else { Ad::Left };
+            } else {
+                // Y 轴倾斜更大，前后方向
+                self.ad = if ay < 0.0 { Ad::Front } else { Ad::Back };
             }
-
-            if ax_abs < ay_abs {
-                if ay < -0.5 {
-                    self.ad = Ad::Front
-                }
-                if ay > 0.5 {
-                    self.ad = Ad::Back;
-                }
-            }
-        } else if az_abs >= 1.0 {
-            self.ad = Ad::Down;
         } else {
             self.ad = Ad::None;
         }
     }
 
-    /// 退出
-    pub fn quit(&self) -> bool {
-        Ad::Down.eq(&self.ad)
+    /// 检测下甩手势（设备向地面加速）→ 暂停游戏
+    /// 正常握持时 az ≈ 1g（重力），下甩时 az 骤降到 0.3g 以下
+    /// 暂停后等待恢复正常握持再继续游戏
+    pub async fn check_pause(&mut self) {
+        let az = self.accel().z();
+        if az < 0.3 {
+            // 下甩手势触发，暂停游戏
+            self.ledc.set_brightness(0x00); // 熄屏表示暂停
+            // 等待设备恢复正常姿态
+            loop {
+                Timer::after_millis(100).await;
+                let az = self.accel().z();
+                // az 回到 0.7 以上表示设备恢复静止握持
+                if az > 0.7 {
+                    // 等用户稳定握持
+                    Timer::after_millis(300).await;
+                    self.ledc.set_brightness(0x01); // 恢复亮度
+                    self.acc_direction();
+                    break;
+                }
+            }
+        }
     }
 
     pub fn new(
@@ -207,8 +276,6 @@ impl<'d> App<'d> {
         mut ledc: LedControl<'d>,
         spawner: Spawner,
         flash: FlashStorage<'d>,
-        rng: Rng,
-        buzzer: Buzzer<'d>,
     ) -> Self {
         ledc.set_brightness(0x01);
 
@@ -221,8 +288,6 @@ impl<'d> App<'d> {
             mpu6050,
             ledc,
             flash,
-            rng,
-            buzzer,
 
             spawner,
         }
@@ -252,11 +317,11 @@ impl<'d> App<'d> {
             match self.ad {
                 // 向上进入对应的界面
                 Ad::Front => {
-                    self.buzzer.menu_confirm().await;
+                    unsafe { buzzer().menu_confirm().await };
                     match self.uis[self.ui_current_idx as usize] {
                         Ui::Timer => Timers::default().run(&mut self).await,
                         Ui::MusicSpectrum => {
-                            // 麦克风采集信息，通过fft转换
+                            music_spectrum::MusicSpectrum::run(&mut self).await;
                         }
                         Ui::Dice => Dice.run(&mut self).await,
                         Ui::Snake => {
@@ -270,7 +335,8 @@ impl<'d> App<'d> {
                         }
                         Ui::BaGua => BaGua::run(&mut self).await,
                         Ui::Maze => {
-                            let mut cr = CubeRng(self.rng.random() as u64).random_range(19..=33);
+                            let mut cr =
+                                CubeRng(unsafe { rng().random() } as u64).random_range(19..=33);
                             if cr % 2 == 0 {
                                 cr += 1;
                             }
@@ -286,8 +352,14 @@ impl<'d> App<'d> {
                             self.flash.write(flash_addr, &flash_data).ok();
                         }
                         Ui::Sokoban => Sokoban::new().run(&mut self).await,
-                        Ui::DodgeCube => DodgeCubeGame::new().run(&mut self).await,
-                        Ui::Sound => self.buzzer.change(),
+                        Ui::DodgeCube => {
+                            let mut dc = DodgeCubeGame::new();
+                            dc.highest = flash_data[0x02];
+                            dc.run(&mut self).await;
+                            flash_data[0x02] = dc.highest;
+                            self.flash.write(flash_addr, &flash_data).ok();
+                        }
+                        Ui::Sound => unsafe { buzzer().change() },
                     }
                 }
                 Ad::Right => {
@@ -297,7 +369,7 @@ impl<'d> App<'d> {
                     }
                     self.ledc
                         .write_bytes(self.uis[self.ui_current_idx as usize].ui());
-                    self.buzzer.menu_select().await;
+                    unsafe { buzzer().menu_select().await };
                 }
                 Ad::Left => {
                     self.ui_current_idx -= 1;
@@ -306,7 +378,7 @@ impl<'d> App<'d> {
                     }
                     self.ledc
                         .write_bytes(self.uis[self.ui_current_idx as usize].ui());
-                    self.buzzer.menu_select().await;
+                    unsafe { buzzer().menu_select().await };
                 }
                 _ => {
                     self.ledc

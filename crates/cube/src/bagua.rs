@@ -1,8 +1,7 @@
 #![doc = include_str!("../../../rfcs/001_bagua.md")]
 
-use crate::{App, CubeRng};
+use crate::{App, CubeRng, rng, buzzer};
 use embassy_time::Timer;
-use esp_hal::rng::Rng;
 
 /// 八卦
 #[derive(Debug)]
@@ -113,8 +112,8 @@ impl BaGua {
         }
     }
 
-    fn random(rng: Rng) -> [u8; 8] {
-        let num = CubeRng(rng.random() as u64).random(1, 9_u32) as u8;
+    fn random(random_val: u32) -> [u8; 8] {
+        let num = CubeRng(random_val as u64).random(1, 9_u32) as u8;
         Self::bagua(num)
     }
 
@@ -128,14 +127,22 @@ impl BaGua {
                     .map(|_| (app.accel().x(), app.accel().y()))
                     .any(|(x, y)| !(-0.3..=0.3).contains(&x) && !(-0.3..=0.3).contains(&y))
             {
-                app.ledc.write_bytes(Self::random(app.rng));
-                app.buzzer.bagua().await;
+                // 滚动动画：快速随机切换八卦面，逐渐减速
+                let steps = 8;
+                for i in (1..=steps).rev() {
+                    let face = Self::random(unsafe { rng().random() });
+                    app.ledc.write_bytes(face);
+                    // 逐渐增加停留时间（减速效果）
+                    Timer::after_millis(30 + (steps - i) as u64 * 20).await;
+                }
+                // 最终结果
+                let result = Self::random(unsafe { rng().random() });
+                app.ledc.write_bytes(result);
+                unsafe { buzzer().bagua().await };
             }
             Timer::after_millis(800).await;
 
-            if app.quit() {
-                break;
-            }
+            app.check_pause().await;
         }
     }
 }

@@ -285,6 +285,7 @@ dependencies = [
  "heapless 0.9.3",
  "maze",
  "microfft",
+ "micromath",
  "mpu6050-dmp",
  "smart-leds",
  "smart-leds-matrix",

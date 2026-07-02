@@ -1,6 +1,6 @@
 #![doc = include_str!("../../../rfcs/002_dice.md")]
 
-use crate::{App, CubeRng, BUZZER, RNG};
+use crate::{App, CubeRng, buzzer, rng};
 use embassy_time::Timer;
 
 /// 骰子
@@ -76,7 +76,7 @@ impl Dice {
     }
 
     fn random() -> [u8; 8] {
-        let num = unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random(1, 7_u32) } as u8;
+        let num = unsafe { CubeRng(rng().random() as u64).random(1, 7_u32) } as u8;
         Self::dice(num)
     }
 
@@ -90,14 +90,22 @@ impl Dice {
                     .map(|_| (app.accel().x(), app.accel().y()))
                     .any(|(x, y)| !(-0.3..=0.3).contains(&x) && !(-0.3..=0.3).contains(&y))
             {
-                app.ledc.write_bytes(Self::random());
-                unsafe { BUZZER.assume_init_mut().dice().await };
+                // 滚动动画：快速随机切换骰子面，逐渐减速
+                let steps = 8;
+                for i in (1..=steps).rev() {
+                    let face = Self::random();
+                    app.ledc.write_bytes(face);
+                    // 逐渐增加停留时间（减速效果）
+                    Timer::after_millis(30 + (steps - i) as u64 * 20).await;
+                }
+                // 最终结果
+                let result = Self::random();
+                app.ledc.write_bytes(result);
+                unsafe { buzzer().dice().await };
             }
             Timer::after_millis(800).await;
 
-            if app.quit() {
-                break;
-            }
+            app.check_pause().await;
         }
     }
 }

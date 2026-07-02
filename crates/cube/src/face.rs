@@ -1,4 +1,4 @@
-use crate::{buzzer::Buzzer, ledc::LedControl, BUZZER, RNG};
+use crate::{buzzer::Buzzer, ledc::LedControl, rng, buzzer as get_buzzer};
 use alloc::vec::Vec;
 use cube_rand::CubeRng;
 use embassy_time::Timer;
@@ -245,7 +245,7 @@ impl Face {
 
         for _ in 0..6 {
             let freq =
-                unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random_range(3000..=9000) };
+                unsafe { CubeRng(rng().random() as u64).random_range(3000..=9000) };
             buzzer.tone(freq as u32, 50).await;
 
             // 呆滞嘴
@@ -254,7 +254,7 @@ impl Face {
             Timer::after_millis(100).await;
 
             let freq =
-                unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random_range(3000..=9000) };
+                unsafe { CubeRng(rng().random() as u64).random_range(3000..=9000) };
             buzzer.tone(freq as u32, 50).await;
 
             // 嘟嘴
@@ -299,7 +299,7 @@ impl Face {
     ) {
         let ex = 1;
         let ey = 4;
-        let buzzer = unsafe { BUZZER.assume_init_mut() };
+        let buzzer = unsafe { get_buzzer() };
 
         for _ in 0..3 {
             self.clear();

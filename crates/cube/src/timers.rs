@@ -1,6 +1,6 @@
 #![doc = include_str!("../../../rfcs/004_timer.md")]
 
-use crate::{App, CubeRng, BUZZER, RNG};
+use crate::{App, CubeRng, buzzer, rng};
 use alloc::vec::Vec;
 use embassy_time::Timer;
 use embedded_graphics::geometry::Point;
@@ -28,29 +28,29 @@ impl core::default::Default for Timers {
 }
 
 impl Timers {
-    fn init(&mut self, app: &mut App<'_>) {
+    async fn init(&mut self, app: &mut App<'_>) {
         app.ledc.clear();
         app.acc_direction();
         app.ledc.write_pixels(self.pixels());
+        Timer::after_millis(1000).await;
 
-        // Timer::after_millis(1000).await;
-        // // 闪烁三次配音效后开始
-        // (0..3).for_each(|_| {
-        //     // TODO: 音效
-        //     app.ledc.set_brightness(0x01);
-        // Timer::after_millis(50).await;
-        //     app.ledc.set_brightness(0x00);
-        // Timer::after_millis(50).await;
-        // });
-        //
-        // Timer::after_millis(1000).await;
+        // 闪烁三次配音效后开始
+        for _ in 0..3 {
+            unsafe { buzzer().timer_pixel_blinky().await };
+            app.ledc.set_brightness(0x01);
+            Timer::after_millis(100).await;
+            app.ledc.set_brightness(0x00);
+            Timer::after_millis(100).await;
+        }
+        app.ledc.set_brightness(0x01);
+        Timer::after_millis(500).await;
     }
 
-    fn pixels(&mut self) -> Vec<Pixel<Rgb888>> {
+    fn pixels(&self) -> Vec<Pixel<Rgb888>> {
         self.pixels.iter().map(|p| p.pixel).collect::<Vec<_>>()
     }
 
-    /// 在某一列找
+    /// 在某一列找最底部的像素
     fn last(&self, rx: i32) -> Option<usize> {
         let last = self
             .pixels
@@ -61,28 +61,48 @@ impl Timers {
     }
 
     pub async fn run(&mut self, app: &mut App<'_>) {
-        self.init(app);
+        self.init(app).await;
 
-        let mut rxs = vec![0, 1, 2, 3, 4, 5, 6, 7];
+        let mut rxs = alloc::vec![0, 1, 2, 3, 4, 5, 6, 7];
 
         loop {
             if self.pixels.is_empty() {
+                // 所有像素落完，播放结束音效
+                unsafe { buzzer().timers_over().await };
+                Timer::after_millis(1000).await;
                 break;
             }
 
+            // 下甩暂停
+            app.acc_direction();
+            app.check_pause().await;
+
             // 随机一列掉下
             let rx = unsafe {
-                CubeRng(RNG.assume_init_mut().random() as u64).random(0, rxs.len() as u32)
+                CubeRng(rng().random() as u64).random(0, rxs.len() as u32)
             } as usize;
             let Some(index) = self.last(rxs[rx]) else {
                 rxs.remove(rx);
                 continue;
             };
 
-            Timer::after_millis(1000).await;
+            Timer::after_millis(800).await;
             let mut pixel = self.pixels.remove(index);
             pixel.blink(app).await;
-            pixel.r#move(app).await;
+
+            // 下落动画：逐行移动到下半部分
+            let target_y = pixel.pixel.0.y + 4;
+            while pixel.pixel.0.y < target_y {
+                pixel.pixel.0.y += 1;
+                // 重绘：所有剩余上半像素 + 当前的下落像素
+                app.ledc.clear();
+                app.ledc.write_pixels(self.pixels());
+                app.ledc.write_pixel(pixel.pixel);
+                Timer::after_millis(80).await;
+            }
+
+            // 下落完成，反弹音效
+            unsafe { buzzer().timer_pixel_rebound().await };
         }
     }
 }
@@ -101,21 +121,13 @@ impl TimerPixel {
         }
     }
 
-    /// 闪烁一下选中的像素,
+    /// 闪烁一下选中的像素
     async fn blink(&mut self, app: &mut App<'_>) {
         for _ in 0..3 {
             self.pixel.1 = BinaryColor::from(self.pixel.1).invert().into();
             app.ledc.write_pixel(self.pixel);
             Timer::after_millis(100).await;
-            unsafe { BUZZER.assume_init_mut().timer_pixel_blinky().await };
+            unsafe { buzzer().timer_pixel_blinky().await };
         }
-    }
-
-    /// 执行像素的下落过程
-    async fn r#move(&mut self, app: &mut App<'_>) {
-        self.pixel.1 = BinaryColor::On.into();
-        self.pixel.0.y += 4;
-        Timer::after_millis(500).await;
-        app.ledc.write_pixel(self.pixel);
     }
 }

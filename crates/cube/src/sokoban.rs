@@ -3,7 +3,7 @@
 use crate::{
     map::{Map, MapCell, Vision},
     player::Player,
-    Ad, App, Point, BUZZER,
+    Ad, App, Point, buzzer,
 };
 use alloc::vec::Vec;
 use embassy_time::Timer;
@@ -12,6 +12,59 @@ use embedded_graphics_core::{
     prelude::WebColors,
     Pixel,
 };
+
+/// 预设的XSB关卡列表
+const SOKOBAN_LEVELS: &[&str] = &[
+    // Level 1: 最简单的入门关（1箱1目标）
+    "
+########
+#------#
+#-$.@--#
+#------#
+#------#
+#------#
+#------#
+########
+",
+    // Level 2: 2箱2目标
+    "
+########
+#------#
+#-$.@--#
+#--.$--#
+#--.---#
+#------#
+#------#
+########
+",
+    // Level 3: 原始关卡
+    "
+########
+#--#---#
+#-$----#
+#--*.*-#
+#-$@*--#
+###$*--#
+-#--*--#
+-#-#.--#
+-#--.--#
+-#######
+",
+    // Level 4: 3箱3目标
+    "
+----#####----------
+----#---#----------
+----#$--#----------
+--###--$##---------
+--#--$-$-#---------
+###-#-##-#---######
+#---#-##-#####--..#
+#-$--$----------..#
+#####-###-#@##--..#
+----#-----#########
+----#######--------
+",
+];
 
 /// 推箱子
 /// 左上角为坐标原点,所有的坐标都为全局坐标
@@ -25,6 +78,8 @@ pub struct Sokoban {
     /// ms
     waiting_time: u64,
     game_over: bool,
+    /// 当前关卡编号
+    level: usize,
 }
 
 impl Default for Sokoban {
@@ -35,18 +90,12 @@ impl Default for Sokoban {
 
 impl Sokoban {
     pub fn new() -> Self {
-        let xsb = "
-########
-#--#---#
-#-$----#
-#--*.*-#
-#-$@*--#
-###$*--#
--#--*--#
--#-#.--#
--#--.--#
--#######
-";
+        Self::new_with_level(0)
+    }
+
+    pub fn new_with_level(level: usize) -> Self {
+        let level_idx = level % SOKOBAN_LEVELS.len();
+        let xsb = SOKOBAN_LEVELS[level_idx];
         let map = SokobanMap::from_xsb(xsb);
         let width = map.map.width;
         let height = map.map.height;
@@ -59,7 +108,20 @@ impl Sokoban {
             vision,
             waiting_time: 300,
             game_over: false,
+            level,
         }
+    }
+
+    /// 重载当前关卡
+    fn reload_level(&mut self) {
+        let level_idx = self.level % SOKOBAN_LEVELS.len();
+        let xsb = SOKOBAN_LEVELS[level_idx];
+        let map = SokobanMap::from_xsb(xsb);
+        self.player = Player::new((map.player.0 .0.x, map.player.0 .0.y).into());
+        self.vision = Vision::new(map.map.width, map.map.height, self.player.pos);
+        self.vision.update_data(&map.map);
+        self.map = map;
+        self.game_over = false;
     }
 
     pub async fn run(&mut self, app: &mut App<'_>) {
@@ -70,12 +132,25 @@ impl Sokoban {
             Timer::after_millis(self.waiting_time).await;
 
             if self.game_over {
-                // TODO: 结束进入下一关
-                Timer::after_millis(1500).await;
-                app.face.break_record_animate(&mut app.ledc).await;
+                // 过关庆祝
+                unsafe { buzzer().sokoban_complete().await };
+                for _ in 0..3 {
+                    app.ledc.clear_with_color(Rgb888::CSS_GREEN);
+                    Timer::after_millis(200).await;
+                    app.ledc.clear();
+                    Timer::after_millis(200).await;
+                }
                 Timer::after_millis(500).await;
-                break;
+
+                // 进入下一关
+                self.level += 1;
+                self.reload_level();
+                continue;
             }
+
+            // 下甩暂停
+            app.check_pause().await;
+
             app.acc_direction();
 
             if !self.hit_wall(app) {
@@ -84,11 +159,11 @@ impl Sokoban {
                 if can_push {
                     let moved = self.player.r#move(app.ad);
                     if moved {
-                        unsafe { BUZZER.assume_init_mut().sokoban_move().await };
+                        unsafe { buzzer().sokoban_move().await };
                     }
                     // 玩家移动之后视野数据改变
                     self.vision.update(app.ad, &self.map.map);
-                    self.game_over();
+                    self.check_complete();
                 }
             }
             self.draw(app);
@@ -134,8 +209,8 @@ impl Sokoban {
         true
     }
 
-    /// 游戏结束，条件是所有箱子都在目标点上
-    fn game_over(&mut self) {
+    /// 检查是否过关：所有箱子都在目标点上
+    fn check_complete(&mut self) {
         let goals = self.map.goals.iter().map(|b| b.0 .0).collect::<Vec<_>>();
         let all = self.map.boxs.iter().all(|b| goals.contains(&b.0 .0));
         self.game_over = all;
@@ -232,9 +307,8 @@ struct SokobanMap<T = TargetType> {
 }
 
 impl SokobanMap {
-    /// TODO: 使用算法生成
     fn new() -> Self {
-        unimplemented!()
+        Self::from_xsb(SOKOBAN_LEVELS[0])
     }
 
     /// 根据XSB生成地图
@@ -291,7 +365,7 @@ impl SokobanMap {
         map
     }
 
-    /// TODO: 根据LURD生成地图
+    /// 根据LURD生成地图（待实现）
     fn from_lurd(_lurd: &str) -> Self {
         unimplemented!()
     }

@@ -33,6 +33,7 @@ embedded-storage.workspace = true
 smart-leds-matrix.workspace = true
 smart-leds.workspace = true
 microfft.workspace = true
+micromath.workspace = true
 spectrum-analyzer.workspace = true
 ws2812-spi.workspace = true
 cube_rand = { path = "../cube_rand/" }

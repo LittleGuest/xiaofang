@@ -1,6 +1,6 @@
 #![doc = include_str!("../../../rfcs/003_snake.md")]
 
-use crate::{Ad, App, Direction, BUZZER, RNG};
+use crate::{Ad, App, Direction, buzzer, rng};
 use alloc::collections::LinkedList;
 use cube_rand::CubeRng;
 use embassy_time::Timer;
@@ -23,6 +23,8 @@ pub struct SnakeGame {
     /// 最高分
     pub highest: u8,
     game_over: bool,
+    /// 吃食物闪烁状态
+    eat_flash: bool,
 }
 
 impl Default for SnakeGame {
@@ -45,6 +47,7 @@ impl SnakeGame {
             score: 0,
             highest: 0,
             game_over: false,
+            eat_flash: false,
         }
     }
 
@@ -56,7 +59,7 @@ impl SnakeGame {
             Timer::after_millis(self.waiting_time).await;
 
             if self.game_over {
-                unsafe { BUZZER.assume_init_mut().snake_die().await };
+                unsafe { buzzer().snake_die().await };
                 app.ledc.draw_score(self.score);
                 Timer::after_millis(1500).await;
                 if self.score > self.highest {
@@ -67,6 +70,7 @@ impl SnakeGame {
                 break;
             }
             app.acc_direction();
+            app.check_pause().await;
 
             self.r#move(&app.ad).await;
 
@@ -85,19 +89,19 @@ impl SnakeGame {
 
         let next_head = self.snake.next_head_pos();
         if self.food.pos.eq(&next_head) {
-            unsafe { BUZZER.assume_init_mut().snake_score().await };
-            // TODO: 得分画面效果
+            unsafe { buzzer().snake_score().await };
+            self.eat_flash = true;
 
             self.snake.grow(self.food.clone());
             self.food
                 .create_food(self.width, self.height, &self.snake.body);
             self.calc_score();
-            unsafe { BUZZER.assume_init_mut().snake_move().await };
+            unsafe { buzzer().snake_move().await };
         } else if self.outside(next_head) || self.snake.overlapping() {
             self.game_over = true;
         } else {
             self.snake.r#move();
-            unsafe { BUZZER.assume_init_mut().snake_move().await };
+            unsafe { buzzer().snake_move().await };
         }
     }
 
@@ -114,6 +118,14 @@ impl SnakeGame {
 
     pub fn draw(&mut self, app: &mut App<'_>) {
         let ledc = &mut app.ledc;
+
+        if self.eat_flash {
+            // 吃食物时全屏短暂闪绿
+            ledc.clear_with_color(Rgb888::CSS_GREEN);
+            self.eat_flash = false;
+            return;
+        }
+
         ledc.clear();
         // 蛇身
         let mut pixels = self.snake.body.clone();
@@ -139,8 +151,8 @@ impl From<Food> for Pixel<Rgb888> {
 impl Food {
     fn random(width: i32, height: i32) -> Self {
         let food = unsafe {
-            let x = CubeRng(RNG.assume_init_mut().random() as u64).random(0, width as u32) as i32;
-            let y = CubeRng(RNG.assume_init_mut().random() as u64).random(0, height as u32) as i32;
+            let x = CubeRng(rng().random() as u64).random(0, width as u32) as i32;
+            let y = CubeRng(rng().random() as u64).random(0, height as u32) as i32;
             (x, y)
         };
         Self {

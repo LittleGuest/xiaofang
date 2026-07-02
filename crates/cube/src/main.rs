@@ -56,7 +56,7 @@ async fn main(spawner: Spawner) {
     // info!("初始化 embassy 完成");
 
     let rng = esp_hal::rng::Rng::new();
-    unsafe { cube::RNG.write(rng) };
+    unsafe { cube::init_rng(rng) };
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     let sw_interrupt =
         esp_hal::interrupt::software::SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
@@ -69,7 +69,7 @@ async fn main(spawner: Spawner) {
     let mut ledc = Ledc::new(peripherals.LEDC);
     ledc.set_global_slow_clock(LSGlobalClkSource::APBClk);
     let buzzer = Buzzer::new(peripherals.GPIO11, ledc, spawner);
-    unsafe { cube::BUZZER.write(buzzer) };
+    unsafe { cube::init_buzzer(buzzer) };
 
     let i2c = I2c::new(peripherals.I2C0, i2c::master::Config::default())
         .unwrap()

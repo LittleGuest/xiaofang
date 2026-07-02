@@ -1,6 +1,6 @@
 #![doc = include_str!("../../../rfcs/006_cube_man.md")]
 
-use crate::{Ad, App, RNG};
+use crate::{Ad, App, buzzer, rng};
 use alloc::{collections::VecDeque, vec::Vec};
 use cube_rand::CubeRng;
 use embassy_time::Timer;
@@ -23,6 +23,8 @@ pub struct CubeManGame {
     game_over: bool,
     /// ms
     waiting_time: u64,
+    /// 得分闪烁状态
+    score_flash: bool,
 }
 
 impl Default for CubeManGame {
@@ -44,6 +46,7 @@ impl CubeManGame {
             highest: 0,
             game_over: false,
             waiting_time: 230,
+            score_flash: false,
         }
     }
 
@@ -53,6 +56,7 @@ impl CubeManGame {
 
         loop {
             if self.game_over {
+                unsafe { buzzer().cube_man_die().await };
                 app.ledc.draw_score(self.score);
                 Timer::after_millis(1500).await;
                 if self.score > self.highest {
@@ -63,6 +67,7 @@ impl CubeManGame {
                 break;
             }
             app.acc_direction();
+            app.check_pause().await;
             {
                 self.floors.pop_front();
                 self.floors.push_back(self.floor_gen.floor(self.depth));
@@ -99,6 +104,9 @@ impl CubeManGame {
             ) {
                 // 随楼梯一起向上运动
                 self.man.up();
+                self.calc_score();
+                self.score_flash = true;
+                unsafe { buzzer().cube_man_score().await };
                 self.moving_on_floor(&floor, app).await;
             } else {
                 self.man.fall();
@@ -185,10 +193,15 @@ impl CubeManGame {
                 .flat_map(|f| f.unwrap().data),
         );
 
-        // 人物
+        // 人物（得分时闪白）
         let mp = self.man.pos;
-        app.ledc
-            .write_pixel(Pixel((mp.x, mp.y).into(), self.man.color));
+        let color = if self.score_flash {
+            Rgb888::CSS_WHITE
+        } else {
+            self.man.color
+        };
+        app.ledc.write_pixel(Pixel((mp.x, mp.y).into(), color));
+        self.score_flash = false;
     }
 }
 
@@ -286,27 +299,37 @@ impl FloorGen {
     /// 随机生成楼梯
     fn random(level: usize) -> Option<Floor> {
         // 概率生成楼梯
-        let per = unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random_range(1..=10) };
+        let per = unsafe { CubeRng(rng().random() as u64).random_range(1..=10) };
         if per < 7 {
             return None;
         }
 
-        // 楼梯长度
-        let len = unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random_range(3..=5) };
+        // 楼梯长度随等级递减（增加难度）
+        let max_len = if level <= 30 { 5 } else if level <= 100 { 4 } else { 3 };
+        let len = unsafe { CubeRng(rng().random() as u64).random_range(3..=max_len) };
+        let start_x = unsafe {
+            CubeRng(rng().random() as u64).random_range(0..=(8 - len)) as i32
+        };
         let mut data = Vec::<Point>::with_capacity(len);
         for i in 0..len {
-            data.push(Point::new(i as i32, 0));
+            data.push(Point::new(start_x + i as i32, 0));
         }
 
-        // TODO: 根据关卡等级生成楼梯
-        let floor = if level <= 5 {
+        // 随机选择楼梯类型，概率随等级调整
+        let r = unsafe { CubeRng(rng().random() as u64).random_range(1..=10) };
+        let floor = if level <= 10 || r <= 5 {
             Floor::new(FloorType::Normal, &data)
-        } else if level > 5 && level <= 150 {
+        } else if r <= 7 {
             Floor::new(FloorType::Fragile(500), &data)
+        } else if r <= 9 {
+            let dir = if unsafe { CubeRng(rng().random() as u64).random_range(0..=1) } == 0 {
+                ConveyorDir::Clockwise
+            } else {
+                ConveyorDir::Counterclockwise
+            };
+            Floor::new(FloorType::Conveyor(dir), &data)
         } else {
-            Floor::new(FloorType::Conveyor(ConveyorDir::Clockwise), &data)
-            // Floor::new(FloorType::Conveyor(ConveyorDir::Counterclockwise), &data)
-            // Floor::new(FloorType::Spring(2), &data)
+            Floor::new(FloorType::Spring(2), &data)
         };
         Some(floor)
     }
@@ -330,7 +353,7 @@ impl FloorGen {
         }
         floors.push_back(floor);
 
-        let span = unsafe { CubeRng(RNG.assume_init_mut().random() as u64).random_range(2..=6) };
+        let span = unsafe { CubeRng(rng().random() as u64).random_range(2..=6) };
         for _ in 0..span {
             floors.push_back(None);
         }
@@ -345,7 +368,7 @@ impl FloorGen {
         // (0..2)
         //     .map(|_| {
         //         let span = unsafe {
-        //             CubeRng(RNG.assume_init_mut().random() as u64).random_range(2..=6) as usize
+        //             CubeRng(rng().random() as u64).random_range(2..=6) as usize
         //         };
         //         let mut floor = Self::random(level);
         //         floor.data.iter_mut().for_each(|f| f.0.y += span as i32);

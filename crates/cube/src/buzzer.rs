@@ -1,4 +1,4 @@
-use crate::{BUZZER, RNG};
+use crate::{buzzer as get_buzzer, rng};
 use alloc::vec::Vec;
 use cube_rand::CubeRng;
 use embassy_executor::Spawner;
@@ -220,6 +220,67 @@ impl<'d> Buzzer<'d> {
         self.spawner.spawn(tone_task(5000, 100).unwrap());
     }
 
+    /// 推箱子过关音效
+    pub async fn sokoban_complete(&mut self) {
+        if !self.open {
+            return;
+        }
+        self.spawner
+            .spawn(tone_ranges_task(&[(2000, 200), (3000, 200), (4000, 200), (5000, 400)]).unwrap());
+    }
+
+    /// 躲避方块移动音效
+    pub async fn dodge_cube_move(&mut self) {
+        if !self.open {
+            return;
+        }
+        self.spawner.spawn(tone_task(5000, 100).unwrap());
+    }
+
+    /// 躲避方块得分音效
+    pub async fn dodge_cube_score(&mut self) {
+        if !self.open {
+            return;
+        }
+        self.spawner
+            .spawn(tone_ranges_task(&[(2000, 500), (3000, 500), (4000, 500)]).unwrap());
+    }
+
+    /// 躲避方块死亡音效
+    pub async fn dodge_cube_die(&mut self) {
+        if !self.open {
+            return;
+        }
+        self.spawner
+            .spawn(tone_ranges_task(&[(500, 500), (300, 500), (100, 500)]).unwrap());
+    }
+
+    /// 方块人移动音效
+    pub async fn cube_man_move(&mut self) {
+        if !self.open {
+            return;
+        }
+        self.spawner.spawn(tone_task(5000, 100).unwrap());
+    }
+
+    /// 方块人得分音效
+    pub async fn cube_man_score(&mut self) {
+        if !self.open {
+            return;
+        }
+        self.spawner
+            .spawn(tone_ranges_task(&[(2000, 500), (3000, 500), (2000, 500)]).unwrap());
+    }
+
+    /// 方块人死亡音效
+    pub async fn cube_man_die(&mut self) {
+        if !self.open {
+            return;
+        }
+        self.spawner
+            .spawn(tone_ranges_task(&[(500, 1000), (300, 1000), (100, 1000)]).unwrap());
+    }
+
     /// 休眠音效
     pub async fn sleep(&mut self) {
         if !self.open {
@@ -236,7 +297,7 @@ impl<'d> Buzzer<'d> {
         self.spawner.spawn(
             tone_task(
                 unsafe {
-                    CubeRng(RNG.assume_init_mut().random() as u64).random_range(3000..=9000) as u32
+                    CubeRng(rng().random() as u64).random_range(3000..=9000) as u32
                 },
                 100,
             )
@@ -263,13 +324,13 @@ impl<'d> Buzzer<'d> {
 
 #[embassy_executor::task]
 async fn tone_task(frequency: u32, duration: u64) {
-    let buzzer = unsafe { BUZZER.assume_init_mut() };
+    let buzzer = unsafe { get_buzzer() };
     buzzer.tone(frequency, duration).await;
 }
 
 #[embassy_executor::task]
 async fn tone_range_task(freq_range: Vec<u32>, duration: u64) {
-    let buzzer = unsafe { BUZZER.assume_init_mut() };
+    let buzzer = unsafe { get_buzzer() };
     for i in freq_range {
         buzzer.tone(i, duration).await;
     }
@@ -277,7 +338,7 @@ async fn tone_range_task(freq_range: Vec<u32>, duration: u64) {
 
 #[embassy_executor::task]
 async fn tone_ranges_task(range: &'static [(u32, u64)]) {
-    let buzzer = unsafe { BUZZER.assume_init_mut() };
+    let buzzer = unsafe { get_buzzer() };
     for (freq, dur) in range {
         buzzer.tone(*freq, *dur).await;
     }

@@ -3,7 +3,7 @@
 use crate::{
     map::{Map, Vision},
     player::Player,
-    Ad, App, CubeRng, Point, BUZZER, RNG,
+    Ad, App, CubeRng, Point, buzzer, rng,
 };
 use alloc::vec::Vec;
 use embassy_time::Timer;
@@ -29,12 +29,11 @@ pub struct Maze {
 impl Maze {
     pub fn new(width: usize, height: usize) -> Self {
         let map = MazeMap::new(width, height);
-        // FIXME: 随机玩家坐标,这里可能导致起始位置较近，后续使用路径算法生成
         let pp = loop {
             let pp = unsafe {
                 Point {
-                    x: CubeRng(RNG.assume_init_mut().random() as u64).random_range(1..width) as i32,
-                    y: CubeRng(RNG.assume_init_mut().random() as u64).random_range(1..height)
+                    x: CubeRng(rng().random() as u64).random_range(1..width) as i32,
+                    y: CubeRng(rng().random() as u64).random_range(1..height)
                         as i32,
                 }
             };
@@ -70,17 +69,24 @@ impl Maze {
             Timer::after_millis(self.waiting_time).await;
 
             if self.game_over {
-                // TODO: 结束动画
-                unsafe { BUZZER.assume_init_mut().maze_over().await };
-                Timer::after_millis(3000).await;
+                // 庆祝动画：绿色闪烁
+                for _ in 0..3 {
+                    app.ledc.clear_with_color(Rgb888::CSS_GREEN);
+                    Timer::after_millis(200).await;
+                    app.ledc.clear();
+                    Timer::after_millis(200).await;
+                }
+                unsafe { buzzer().maze_over().await };
+                Timer::after_millis(1500).await;
                 break;
             }
             app.acc_direction();
+            app.check_pause().await;
 
             if !self.hit_wall(app) {
                 let moved = self.player.r#move(app.ad);
                 if moved {
-                    unsafe { BUZZER.assume_init_mut().maze_move().await };
+                    unsafe { buzzer().maze_move().await };
                     // 玩家移动之后视野数据改变
                     self.vision.update(app.ad, &self.map.map);
                     // 游戏结束
@@ -165,7 +171,7 @@ impl MazeMap {
         // 使用地图生成算法生成地图 TODO: 迷宫大小,使用的算法都随机
         let maze = maze::Maze::new(width, height)
             .unwrap()
-            .generate(&mut unsafe { CubeRng(RNG.assume_init_mut().random() as u64) });
+            .generate(&mut unsafe { CubeRng(rng().random() as u64) });
         let mut map = Map::new(width, height);
         for y in 0..height {
             for x in 0..width {
@@ -184,25 +190,55 @@ impl MazeMap {
         }
     }
 
-    /// 计算结束位置
+    /// 使用BFS计算结束位置，选择距离起点最远的可达点
     fn cal_epos(&mut self) {
-        let pos = loop {
-            let x = unsafe {
-                CubeRng(RNG.assume_init_mut().random() as u64).random_range(0..self.map.width - 1)
-            } as i32;
+        use alloc::collections::VecDeque;
+        use alloc::vec::Vec;
 
-            let y = unsafe {
-                CubeRng(RNG.assume_init_mut().random() as u64).random_range(0..self.map.height - 1)
-            } as i32;
+        let w = self.map.width;
+        let h = self.map.height;
+        let walls: Vec<(i32, i32)> = self
+            .map
+            .data
+            .iter()
+            .map(|c| (c.0 .0.x, c.0 .0.y))
+            .collect();
 
-            if self.map.data.iter().any(|c| c.0 .0.x == x && c.0 .0.y == y)
-                || (self.spos.x == x && self.spos.y == y)
-            {
-                continue;
+        // distance[y][x] = 距离，usize::MAX 表示未访问
+        let mut distance = alloc::vec![alloc::vec![usize::MAX; w]; h];
+        let mut queue = VecDeque::new();
+
+        let sx = self.spos.x as usize;
+        let sy = self.spos.y as usize;
+        distance[sy][sx] = 0;
+        queue.push_back((sx, sy));
+
+        let dirs: [(i32, i32); 4] = [(0, -1), (1, 0), (0, 1), (-1, 0)];
+        let mut max_dist = 0;
+        let mut best = (sx, sy);
+
+        while let Some((cx, cy)) = queue.pop_front() {
+            let cur_d = distance[cy][cx];
+            for (dx, dy) in dirs {
+                let nx = cx as i32 + dx;
+                let ny = cy as i32 + dy;
+                if nx < 0 || ny < 0 || nx >= w as i32 || ny >= h as i32 {
+                    continue;
+                }
+                let nx = nx as usize;
+                let ny = ny as usize;
+                if walls.contains(&(nx as i32, ny as i32)) || distance[ny][nx] != usize::MAX {
+                    continue;
+                }
+                distance[ny][nx] = cur_d + 1;
+                if cur_d + 1 > max_dist {
+                    max_dist = cur_d + 1;
+                    best = (nx, ny);
+                }
+                queue.push_back((nx, ny));
             }
+        }
 
-            break (x, y);
-        };
-        self.epos = pos.into();
+        self.epos = Point::new(best.0 as i32, best.1 as i32);
     }
 }
