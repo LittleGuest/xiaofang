@@ -4,8 +4,6 @@
 use crate::{dodge_cube::DodgeCubeGame, sokoban::Sokoban};
 use alloc::vec::Vec;
 use bagua::BaGua;
-use buzzer::Buzzer;
-use core::mem::MaybeUninit;
 use cube_man::CubeManGame;
 use cube_rand::CubeRng;
 use dice::Dice;
@@ -26,7 +24,6 @@ use snake::SnakeGame;
 use timers::Timers;
 use ui::Ui;
 
-#[macro_use]
 extern crate alloc;
 
 pub mod bagua;
@@ -49,75 +46,6 @@ pub mod ui;
 pub mod wifi_ap;
 
 pub type Color = Rgb888;
-
-/// 安全包装 `UnsafeCell` 以允许跨线程共享
-/// 等价于 nightly 的 `core::cell::SyncUnsafeCell`
-#[repr(transparent)]
-struct SyncUnsafeCell<T>(core::cell::UnsafeCell<T>);
-
-unsafe impl<T> Sync for SyncUnsafeCell<T> {}
-
-impl<T> SyncUnsafeCell<T> {
-    const fn new(value: T) -> Self {
-        Self(core::cell::UnsafeCell::new(value))
-    }
-
-    fn get(&self) -> *mut T {
-        self.0.get()
-    }
-}
-
-static RNG: SyncUnsafeCell<MaybeUninit<Rng>> = SyncUnsafeCell::new(MaybeUninit::uninit());
-static BUZZER: SyncUnsafeCell<MaybeUninit<Buzzer>> = SyncUnsafeCell::new(MaybeUninit::uninit());
-static LEDCTL: SyncUnsafeCell<MaybeUninit<LedControl>> = SyncUnsafeCell::new(MaybeUninit::uninit());
-
-/// 初始化 RNG 全局静态变量
-///
-/// # Safety
-/// 只能调用一次，且必须在任何 `rng()` 调用之前
-pub unsafe fn init_rng(val: Rng) {
-    unsafe { (*RNG.get()).write(val) };
-}
-
-/// 获取 RNG 的可变引用
-///
-/// # Safety
-/// 调用者必须确保 `init_rng` 已被调用，且不会同时存在其他引用
-pub unsafe fn rng() -> &'static mut Rng {
-    unsafe { (*RNG.get()).assume_init_mut() }
-}
-
-/// 初始化 BUZZER 全局静态变量
-///
-/// # Safety
-/// 只能调用一次，且必须在任何 `buzzer()` 调用之前
-pub unsafe fn init_buzzer(val: Buzzer<'static>) {
-    unsafe { (*BUZZER.get()).write(val) };
-}
-
-/// 获取 BUZZER 的可变引用
-///
-/// # Safety
-/// 调用者必须确保 `init_buzzer` 已被调用，且不会同时存在其他引用
-pub unsafe fn buzzer() -> &'static mut Buzzer<'static> {
-    unsafe { (*BUZZER.get()).assume_init_mut() }
-}
-
-/// 初始化 LEDCTL 全局静态变量
-///
-/// # Safety
-/// 只能调用一次，且必须在任何 `ledctl()` 调用之前
-pub unsafe fn init_ledctl(val: LedControl<'static>) {
-    unsafe { (*LEDCTL.get()).write(val) };
-}
-
-/// 获取 LEDCTL 的可变引用
-///
-/// # Safety
-/// 调用者必须确保 `init_ledctl` 已被调用，且不会同时存在其他引用
-pub unsafe fn ledctl() -> &'static mut LedControl<'static> {
-    unsafe { (*LEDCTL.get()).assume_init_mut() }
-}
 
 /// 物体移动方向
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -215,6 +143,7 @@ pub struct App<'d> {
 
     mpu6050: Mpu6050<I2c<'d, Blocking>>,
     ledc: LedControl<'d>,
+    rng: Rng,
     flash: FlashStorage<'d>,
 
     spawner: Spawner,
@@ -276,6 +205,7 @@ impl<'d> App<'d> {
         mut ledc: LedControl<'d>,
         spawner: Spawner,
         flash: FlashStorage<'d>,
+        rng: Rng,
     ) -> Self {
         ledc.set_brightness(0x01);
 
@@ -287,6 +217,7 @@ impl<'d> App<'d> {
 
             mpu6050,
             ledc,
+            rng,
             flash,
 
             spawner,
@@ -317,7 +248,7 @@ impl<'d> App<'d> {
             match self.ad {
                 // 向上进入对应的界面
                 Ad::Front => {
-                    unsafe { buzzer().menu_confirm().await };
+                    buzzer::menu_confirm().await;
                     match self.uis[self.ui_current_idx as usize] {
                         Ui::Timer => Timers::default().run(&mut self).await,
                         Ui::MusicSpectrum => {
@@ -325,7 +256,7 @@ impl<'d> App<'d> {
                         }
                         Ui::Dice => Dice.run(&mut self).await,
                         Ui::Snake => {
-                            let mut snake = SnakeGame::new();
+                            let mut snake = SnakeGame::new(&mut self.rng);
                             // 最高分从flash中获取
                             snake.highest = flash_data[0x00];
                             snake.run(&mut self).await;
@@ -335,12 +266,11 @@ impl<'d> App<'d> {
                         }
                         Ui::BaGua => BaGua::run(&mut self).await,
                         Ui::Maze => {
-                            let mut cr =
-                                CubeRng(unsafe { rng().random() } as u64).random_range(19..=33);
+                            let mut cr = CubeRng(self.rng.random() as u64).random_range(19..=33);
                             if cr % 2 == 0 {
                                 cr += 1;
                             }
-                            Maze::new(cr, cr).run(&mut self).await;
+                            Maze::new(cr, cr, &mut self.rng).run(&mut self).await;
                         }
                         Ui::CubeMan => {
                             let mut cm = CubeManGame::new();
@@ -359,7 +289,7 @@ impl<'d> App<'d> {
                             flash_data[0x02] = dc.highest;
                             self.flash.write(flash_addr, &flash_data).ok();
                         }
-                        Ui::Sound => unsafe { buzzer().change() },
+                        Ui::Sound => buzzer::change(),
                     }
                 }
                 Ad::Right => {
@@ -369,7 +299,7 @@ impl<'d> App<'d> {
                     }
                     self.ledc
                         .write_bytes(self.uis[self.ui_current_idx as usize].ui());
-                    unsafe { buzzer().menu_select().await };
+                    buzzer::menu_select().await;
                 }
                 Ad::Left => {
                     self.ui_current_idx -= 1;
@@ -378,7 +308,7 @@ impl<'d> App<'d> {
                     }
                     self.ledc
                         .write_bytes(self.uis[self.ui_current_idx as usize].ui());
-                    unsafe { buzzer().menu_select().await };
+                    buzzer::menu_select().await;
                 }
                 _ => {
                     self.ledc

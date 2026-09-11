@@ -1,14 +1,15 @@
 #![doc = include_str!("../../../rfcs/003_snake.md")]
 
-use crate::{Ad, App, Direction, buzzer, rng};
+use crate::{Ad, App, Direction, buzzer};
 use alloc::collections::LinkedList;
 use cube_rand::CubeRng;
 use embassy_time::Timer;
 use embedded_graphics::{
+    Pixel,
     geometry::Point,
     pixelcolor::{Rgb888, WebColors},
-    Pixel,
 };
+use esp_hal::rng::Rng;
 
 #[derive(Debug)]
 pub struct SnakeGame {
@@ -27,14 +28,8 @@ pub struct SnakeGame {
     eat_flash: bool,
 }
 
-impl Default for SnakeGame {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl SnakeGame {
-    pub fn new() -> Self {
+    pub fn new(rng: &mut Rng) -> Self {
         let width = 8;
         let height = 8;
 
@@ -42,7 +37,7 @@ impl SnakeGame {
             width,
             height,
             snake: Snake::new(Point::new(5, 5)),
-            food: Food::random(width, height),
+            food: Food::random(width, height, rng),
             waiting_time: 600,
             score: 0,
             highest: 0,
@@ -59,7 +54,7 @@ impl SnakeGame {
             Timer::after_millis(self.waiting_time).await;
 
             if self.game_over {
-                unsafe { buzzer().snake_die().await };
+                buzzer::snake_die().await;
                 app.ledc.draw_score(self.score);
                 Timer::after_millis(1500).await;
                 if self.score > self.highest {
@@ -72,13 +67,13 @@ impl SnakeGame {
             app.acc_direction();
             app.check_pause().await;
 
-            self.r#move(&app.ad).await;
+            self.r#move(&app.ad, &mut app.rng).await;
 
             self.draw(app);
         }
     }
 
-    async fn r#move(&mut self, gd: &Ad) {
+    async fn r#move(&mut self, gd: &Ad, rng: &mut Rng) {
         match gd {
             Ad::Front => self.snake.set_direction(Direction::Up),
             Ad::Right => self.snake.set_direction(Direction::Right),
@@ -89,19 +84,19 @@ impl SnakeGame {
 
         let next_head = self.snake.next_head_pos();
         if self.food.pos.eq(&next_head) {
-            unsafe { buzzer().snake_score().await };
+            buzzer::snake_score().await;
             self.eat_flash = true;
 
             self.snake.grow(self.food.clone());
             self.food
-                .create_food(self.width, self.height, &self.snake.body);
+                .create_food(self.width, self.height, &self.snake.body, rng);
             self.calc_score();
-            unsafe { buzzer().snake_move().await };
+            buzzer::snake_move().await;
         } else if self.outside(next_head) || self.snake.overlapping() {
             self.game_over = true;
         } else {
             self.snake.r#move();
-            unsafe { buzzer().snake_move().await };
+            buzzer::snake_move().await;
         }
     }
 
@@ -149,10 +144,10 @@ impl From<Food> for Pixel<Rgb888> {
 }
 
 impl Food {
-    fn random(width: i32, height: i32) -> Self {
-        let food = unsafe {
-            let x = CubeRng(rng().random() as u64).random(0, width as u32) as i32;
-            let y = CubeRng(rng().random() as u64).random(0, height as u32) as i32;
+    fn random(width: i32, height: i32, rng: &mut Rng) -> Self {
+        let food = {
+            let x = CubeRng(rng.random() as u64).random(0, width as u32) as i32;
+            let y = CubeRng(rng.random() as u64).random(0, height as u32) as i32;
             (x, y)
         };
         Self {
@@ -161,9 +156,15 @@ impl Food {
         }
     }
 
-    fn create_food(&self, width: i32, height: i32, snake_body: &LinkedList<Pixel<Rgb888>>) -> Self {
+    fn create_food(
+        &self,
+        width: i32,
+        height: i32,
+        snake_body: &LinkedList<Pixel<Rgb888>>,
+        rng: &mut Rng,
+    ) -> Self {
         loop {
-            let food = Food::random(width, height);
+            let food = Food::random(width, height, rng);
             if snake_body.iter().any(|s| s.0.eq(&food.pos)) {
                 continue;
             } else {

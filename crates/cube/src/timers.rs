@@ -1,12 +1,12 @@
 #![doc = include_str!("../../../rfcs/004_timer.md")]
 
-use crate::{App, CubeRng, buzzer, rng};
+use crate::{App, CubeRng, buzzer};
 use alloc::vec::Vec;
 use embassy_time::Timer;
 use embedded_graphics::geometry::Point;
 use embedded_graphics_core::{
-    pixelcolor::{BinaryColor, Rgb888},
     Pixel,
+    pixelcolor::{BinaryColor, Rgb888},
 };
 
 /// 沙漏
@@ -36,7 +36,7 @@ impl Timers {
 
         // 闪烁三次配音效后开始
         for _ in 0..3 {
-            unsafe { buzzer().timer_pixel_blinky().await };
+            buzzer::timer_pixel_blinky().await;
             app.ledc.set_brightness(0x01);
             Timer::after_millis(100).await;
             app.ledc.set_brightness(0x00);
@@ -68,7 +68,7 @@ impl Timers {
         loop {
             if self.pixels.is_empty() {
                 // 所有像素落完，播放结束音效
-                unsafe { buzzer().timers_over().await };
+                buzzer::timers_over().await;
                 Timer::after_millis(1000).await;
                 break;
             }
@@ -78,9 +78,7 @@ impl Timers {
             app.check_pause().await;
 
             // 随机一列掉下
-            let rx = unsafe {
-                CubeRng(rng().random() as u64).random(0, rxs.len() as u32)
-            } as usize;
+            let rx = CubeRng(app.rng.random() as u64).random(0, rxs.len() as u32) as usize;
             let Some(index) = self.last(rxs[rx]) else {
                 rxs.remove(rx);
                 continue;
@@ -102,7 +100,7 @@ impl Timers {
             }
 
             // 下落完成，反弹音效
-            unsafe { buzzer().timer_pixel_rebound().await };
+            buzzer::timer_pixel_rebound().await;
         }
     }
 }
@@ -127,7 +125,7 @@ impl TimerPixel {
             self.pixel.1 = BinaryColor::from(self.pixel.1).invert().into();
             app.ledc.write_pixel(self.pixel);
             Timer::after_millis(100).await;
-            unsafe { buzzer().timer_pixel_blinky().await };
+            buzzer::timer_pixel_blinky().await;
         }
     }
 }

@@ -11,30 +11,42 @@ repository = "https://github.com/LittleGuest/xiaofang"
 authors = ["LittleGuest <2190975784@qq.com>"]
 
 [workspace.dependencies]
-esp-hal = { version = "~1.1.0", features = [
-  "defmt",
-  "esp32c3",
-  "unstable",
-  # "requires-unstable",
-] }
+esp-hal = { version = "~1.1.0", features = ["defmt", "esp32c3", "unstable"] }
 
 esp-rtos = { version = "0.3.0", features = [
-  "embassy",
-  "esp-radio",
-  "esp-alloc",
-  "esp32c3",
   "defmt",
+  "embassy",
+  "esp-alloc",
+  "esp-radio",
+  "esp32c3",
 ] }
+
 defmt = "1.0.1"
 esp-bootloader-esp-idf = { version = "0.5.0", features = ["defmt", "esp32c3"] }
+
+embassy-net = { version = "0.9.1", features = [
+  "defmt",
+  "dhcpv4",
+  "medium-ethernet",
+  "tcp",
+  "udp",
+] }
+embedded-io = { version = "0.7.1", features = ["defmt"] }
+embedded-io-async = { version = "0.7.0", features = ["defmt"] }
+esp-alloc = { version = "0.10.0", features = ["defmt"] }
+esp-backtrace = { version = "0.19.0", features = [
+  "defmt",
+  "esp32c3",
+  "panic-handler",
+] }
+esp-println = { version = "0.17.0", features = ["defmt-espflash", "esp32c3"] }
+# for more networking protocol support see https://crates.io/crates/edge-net
 bleps = { git = "https://github.com/bjoernQ/bleps", package = "bleps", rev = "a5148d8ae679e021b78f53fd33afb8bb35d0b62e", features = [
   "async",
   "macros",
 ] }
-critical-section = "1.2.0"
-embedded-io = { version = "0.7.1", features = ["defmt"] }
-esp-alloc = { version = "0.10.0", features = ["defmt"] }
-esp-println = { version = "0.17.0", features = ["defmt-espflash", "esp32c3"] }
+embassy-executor = { version = "0.10.0", features = ["defmt"] }
+embassy-time = { version = "0.5.0", features = ["defmt"] }
 esp-radio = { version = "0.18.0", features = [
   "ble",
   "coex",
@@ -43,6 +55,7 @@ esp-radio = { version = "0.18.0", features = [
   "esp32c3",
   "unstable",
   "wifi",
+  "esp-now",
 ] }
 smoltcp = { version = "0.13.0", default-features = false, features = [
   "defmt",
@@ -58,23 +71,8 @@ smoltcp = { version = "0.13.0", default-features = false, features = [
   "socket-udp",
 ] }
 
-# embassy-net = { version = "0.9.1", features = [
-#   "defmt",
-#   "dhcpv4",
-#   "medium-ethernet",
-#   "tcp",
-#   "udp",
-#   "dns",
-# ] }
-embedded-io-async = { version = "0.7.0", features = [] }
-embassy-executor = { version = "0.10.0", features = [
-  "defmt",
-  "platform-riscv32",
-] }
-embassy-time = { version = "0.5.1", features = ["defmt"] }
-# esp-hal-embassy = { version = "0.9.0", features = ["defmt"] }
+critical-section = "1.2.0"
 static_cell = "2.1.1"
-
 heapless = { version = "0.9.3", default-features = false }
 embassy-sync = "0.8.0"
 mpu6050-dmp = "0.6.0"
@@ -85,7 +83,9 @@ esp-storage = { version = "0.9.0", features = ["defmt", "esp32c3"] }
 embedded-storage = "0.3.1"
 smart-leds-matrix = "0.2.0"
 smart-leds = "0.4.0"
-microfft = { version = "0.6.0", default-features = false, features = ["size-64"] }
+microfft = { version = "0.6.0", default-features = false, features = [
+  "size-64",
+] }
 micromath = "2.1.0"
 spectrum-analyzer = "1.5.0"
 ws2812-spi = "0.5.0"

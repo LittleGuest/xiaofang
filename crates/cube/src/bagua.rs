@@ -1,6 +1,6 @@
 #![doc = include_str!("../../../rfcs/001_bagua.md")]
 
-use crate::{App, CubeRng, rng, buzzer};
+use crate::{App, CubeRng, buzzer};
 use embassy_time::Timer;
 
 /// 八卦
@@ -130,15 +130,15 @@ impl BaGua {
                 // 滚动动画：快速随机切换八卦面，逐渐减速
                 let steps = 8;
                 for i in (1..=steps).rev() {
-                    let face = Self::random(unsafe { rng().random() });
+                    let face = Self::random(app.rng.random());
                     app.ledc.write_bytes(face);
                     // 逐渐增加停留时间（减速效果）
                     Timer::after_millis(30 + (steps - i) as u64 * 20).await;
                 }
                 // 最终结果
-                let result = Self::random(unsafe { rng().random() });
+                let result = Self::random(app.rng.random());
                 app.ledc.write_bytes(result);
-                unsafe { buzzer().bagua().await };
+                buzzer::bagua().await;
             }
             Timer::after_millis(800).await;
 

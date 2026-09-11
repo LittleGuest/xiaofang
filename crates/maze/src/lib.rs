@@ -9,7 +9,7 @@ use alloc::vec::Vec;
 use core::convert::TryInto;
 use core::ops::{Add, Index, IndexMut, Mul};
 use core::slice::{Iter, IterMut};
-use rand::{prelude::SliceRandom, Rng};
+use rand::{Rng, prelude::SliceRandom};
 
 #[macro_use]
 extern crate alloc;

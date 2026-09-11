@@ -1,14 +1,11 @@
 #![doc = include_str!("../../../rfcs/008_dodge_cube.md")]
 
-use crate::{buzzer, rng, Ad, App, CubeRng, Point};
+use crate::{Ad, App, CubeRng, Point, buzzer};
 use alloc::collections::VecDeque;
 use alloc::vec::Vec;
 use embassy_time::Timer;
-use embedded_graphics_core::{
-    pixelcolor::Rgb888,
-    prelude::WebColors,
-    Pixel,
-};
+use embedded_graphics_core::{Pixel, pixelcolor::Rgb888, prelude::WebColors};
+use esp_hal::rng::Rng;
 
 /// 躲避方块
 #[derive(Debug)]
@@ -39,11 +36,9 @@ impl CubeRow {
     }
 
     /// 随机生成一行障碍物，保留 gap_count 个连续空位
-    fn random(gap_count: usize) -> Self {
+    fn random(gap_count: usize, rng: &mut Rng) -> Self {
         let mut data = [true; 8];
-        let start = unsafe {
-            CubeRng(rng().random() as u64).random_range(0..=(8 - gap_count))
-        };
+        let start = CubeRng(rng.random() as u64).random_range(0..=(8 - gap_count));
         for i in start..start + gap_count {
             if i < 8 {
                 data[i] = false;
@@ -87,7 +82,7 @@ impl DodgeCubeGame {
             Timer::after_millis(self.waiting_time).await;
 
             if self.game_over {
-                unsafe { buzzer().dodge_cube_die().await };
+                buzzer::dodge_cube_die().await;
                 app.ledc.draw_score(self.score);
                 Timer::after_millis(1500).await;
                 if self.score > self.highest {
@@ -103,9 +98,9 @@ impl DodgeCubeGame {
 
             // 2. 根据难度生成新行（从顶部进入）
             let gap = if self.score < 10 { 2 } else { 1 };
-            let should_generate = unsafe { CubeRng(rng().random() as u64).random_range(1..=3) };
+            let should_generate = CubeRng(app.rng.random() as u64).random_range(1..=3);
             if should_generate > 1 {
-                self.rows.push_back(CubeRow::random(gap));
+                self.rows.push_back(CubeRow::random(gap, &mut app.rng));
             } else {
                 self.rows.push_back(CubeRow::empty());
             }
@@ -114,7 +109,7 @@ impl DodgeCubeGame {
             app.acc_direction();
             app.check_pause().await;
             self.r#move(&app.ad);
-            unsafe { buzzer().dodge_cube_move().await };
+            buzzer::dodge_cube_move().await;
 
             // 4. 碰撞检测：玩家位置是否有障碍物
             let py = self.player_pos.y as usize;
@@ -127,7 +122,7 @@ impl DodgeCubeGame {
             // 5. 得分
             self.calc_score();
             if self.score % 10 == 0 {
-                unsafe { buzzer().dodge_cube_score().await };
+                buzzer::dodge_cube_score().await;
             }
 
             // 6. 难度递增
@@ -177,10 +172,7 @@ impl DodgeCubeGame {
         for (y, row) in self.rows.iter().enumerate() {
             for (x, &occupied) in row.data.iter().enumerate() {
                 if occupied {
-                    pixels.push(Pixel(
-                        (x as i32, y as i32).into(),
-                        Rgb888::CSS_CYAN,
-                    ));
+                    pixels.push(Pixel((x as i32, y as i32).into(), Rgb888::CSS_CYAN));
                 }
             }
         }

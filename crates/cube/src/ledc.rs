@@ -1,11 +1,11 @@
 use crate::mapping;
 use defmt::error;
 use embedded_graphics::{pixelcolor::*, prelude::*};
-use esp_hal::{spi::master::Spi, Blocking};
+use esp_hal::{Blocking, spi::master::Spi};
 use heapless::Vec;
 use smart_leds_matrix::{
-    layout::{invert_axis::NoInvert, Rectangular},
     SmartLedMatrix,
+    layout::{Rectangular, invert_axis::NoInvert},
 };
 use ws2812_spi::Ws2812;
 

@@ -1,7 +1,9 @@
-use crate::{buzzer as get_buzzer, rng};
 use alloc::vec::Vec;
+use core::sync::atomic::{AtomicBool, Ordering};
 use cube_rand::CubeRng;
 use embassy_executor::Spawner;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::channel::Channel;
 use embassy_time::Timer;
 use esp_hal::gpio::{DriveMode, Level, Output, OutputConfig};
 use esp_hal::ledc::channel::ChannelIFace as _;
@@ -9,35 +11,19 @@ use esp_hal::ledc::timer::TimerIFace;
 use esp_hal::ledc::{Ledc, LowSpeed, channel, timer};
 use esp_hal::peripherals::GPIO11;
 use esp_hal::time::Rate;
+use static_cell::StaticCell;
+
+pub static BUZZER_CELL: StaticCell<Buzzer<'static>> = StaticCell::new();
 
 /// 蜂鸣器
 pub struct Buzzer<'d> {
-    pub open: bool,
     pin: GPIO11<'d>,
     ledc: Ledc<'d>,
-    spawner: Spawner,
 }
 
 impl<'d> Buzzer<'d> {
-    pub fn new(pin: GPIO11<'d>, ledc: Ledc<'d>, spawner: Spawner) -> Self {
-        Self {
-            open: true,
-            ledc,
-            pin,
-            spawner,
-        }
-    }
-
-    fn open(&mut self) {
-        self.open = true;
-    }
-
-    fn close(&mut self) {
-        self.open = false;
-    }
-
-    pub fn change(&mut self) {
-        self.open = !self.open
+    pub fn new(pin: GPIO11<'d>, ledc: Ledc<'d>) -> Self {
+        Self { ledc, pin }
     }
 
     /// FIXME: esp_hal::ledc 暂时仅支持固定频率输出，不同频率需要重新配置定时器和通道
@@ -67,7 +53,7 @@ impl<'d> Buzzer<'d> {
     /// 发声
     /// frequency: 发声频率,单位HZ
     /// duration: 发声时长,单位毫秒
-    pub async fn tone(&mut self, frequency: u32, duration: u64) {
+    async fn tone(&mut self, frequency: u32, duration: u64) {
         self.drive(frequency, 50).await;
         Timer::after_millis(duration).await;
         if duration != 0 {
@@ -76,270 +62,235 @@ impl<'d> Buzzer<'d> {
     }
 
     /// 停止发声
-    pub async fn no_tone(&mut self) {
+    async fn no_tone(&mut self) {
         self.drive(1, 0).await;
     }
+}
 
-    /// 菜单选择音效
-    pub async fn menu_select(&mut self) {
-        if !self.open {
-            return;
+/// 音效开关（与主任务、音效任务共享）
+static OPEN: AtomicBool = AtomicBool::new(true);
+
+/// 翻转音效开关
+pub fn change() {
+    OPEN.store(!OPEN.load(Ordering::Relaxed), Ordering::Relaxed);
+}
+
+/// 单音效任务的指令
+#[derive(Clone)]
+enum SoundCmd {
+    Tone(u32, u64),
+    Range(Vec<u32>, u64),
+    Ranges(&'static [(u32, u64)]),
+}
+
+/// 音量关闭时丢弃音效
+fn play(cmd: SoundCmd) {
+    if !OPEN.load(Ordering::Relaxed) {
+        return;
+    }
+    let _ = SOUND.try_send(cmd);
+}
+
+/// 有界队列：所有音效统一异步入队，由唯一音效任务串行播放
+static SOUND: Channel<CriticalSectionRawMutex, SoundCmd, 16> = Channel::new();
+
+/// 唯一音效任务：独占持有蜂鸣器，串行播放已入队的音效
+#[embassy_executor::task]
+async fn sound_player(buzzer: &'static mut Buzzer<'static>) {
+    loop {
+        match SOUND.receive().await {
+            SoundCmd::Tone(f, d) => buzzer.tone(f, d).await,
+            SoundCmd::Range(freqs, d) => {
+                for f in freqs {
+                    buzzer.tone(f, d).await;
+                }
+            }
+            SoundCmd::Ranges(items) => {
+                for (f, d) in items {
+                    buzzer.tone(*f, *d).await;
+                }
+            }
         }
-        self.spawner.spawn(tone_task(1500, 300).unwrap());
-    }
-
-    /// 菜单确认音效
-    pub async fn menu_confirm(&mut self) {
-        if !self.open {
-            return;
-        }
-        let range = (400..2000).step_by(100).collect::<Vec<u32>>();
-        self.spawner.spawn(tone_range_task(range, 50).unwrap());
-    }
-
-    /// 菜单进入音效
-    pub async fn menu_access(&mut self) {
-        if !self.open {
-            return;
-        }
-        let range = (200..=3000).rev().step_by(200).collect::<Vec<u32>>();
-        self.spawner.spawn(tone_range_task(range, 50).unwrap());
-    }
-
-    /// 八卦音效
-    pub async fn bagua(&mut self) {
-        if !self.open {
-            return;
-        }
-        let range = (200..=3000).rev().step_by(200).collect::<Vec<u32>>();
-        self.spawner.spawn(tone_range_task(range, 50).unwrap());
-    }
-
-    /// 骰子音效
-    pub async fn dice(&mut self) {
-        if !self.open {
-            return;
-        }
-        let range = (200..=3000).rev().step_by(400).collect::<Vec<u32>>();
-        self.spawner.spawn(tone_range_task(range, 50).unwrap());
-    }
-
-    /// 迷宫移动音效
-    pub async fn maze_move(&mut self) {
-        if !self.open {
-            return;
-        }
-        self.spawner.spawn(tone_task(5000, 100).unwrap());
-    }
-
-    /// 迷宫结束音效
-    pub async fn maze_over(&mut self) {
-        if !self.open {
-            return;
-        }
-        self.spawner.spawn(
-            tone_ranges_task(&[(6000, 100), (6000, 100), (6000, 100), (6000, 150)]).unwrap(),
-        );
-    }
-
-    /// 休眠开启音效
-    pub async fn hibernation(&mut self) {
-        self.spawner
-            .spawn(tone_ranges_task(&[(8000, 100), (2500, 100), (800, 100)]).unwrap());
-    }
-
-    /// 开机音效
-    pub async fn power_on(&mut self) {
-        self.spawner
-            .spawn(tone_ranges_task(&[(800, 200), (2500, 100), (8000, 200)]).unwrap());
-    }
-
-    /// 唤醒音效
-    pub async fn wakeup(&mut self) {
-        self.spawner
-            .spawn(tone_ranges_task(&[(1500, 200), (8000, 200)]).unwrap());
-    }
-
-    /// 沙漏像素闪烁音效
-    pub async fn timer_pixel_blinky(&mut self) {
-        if !self.open {
-            return;
-        }
-        self.spawner.spawn(tone_task(8000, 100).unwrap());
-    }
-
-    /// 沙漏像素反弹音效
-    pub async fn timer_pixel_rebound(&mut self) {
-        if !self.open {
-            return;
-        }
-        self.spawner.spawn(tone_task(4000, 100).unwrap());
-    }
-
-    /// 沙漏结束音效
-    pub async fn timers_over(&mut self) {
-        if !self.open {
-            return;
-        }
-        self.spawner.spawn(
-            tone_ranges_task(&[(6000, 100), (6000, 100), (6000, 100), (6000, 150)]).unwrap(),
-        );
-    }
-
-    /// 贪吃蛇移动音效
-    pub async fn snake_move(&mut self) {
-        if !self.open {
-            return;
-        }
-        self.spawner.spawn(tone_task(5000, 100).unwrap());
-    }
-
-    /// 贪吃蛇得分音效
-    pub async fn snake_score(&mut self) {
-        if !self.open {
-            return;
-        }
-        self.spawner
-            .spawn(tone_ranges_task(&[(2000, 1000), (3000, 1000), (2000, 1000)]).unwrap());
-    }
-
-    /// 贪吃蛇死亡音效
-    pub async fn snake_die(&mut self) {
-        if !self.open {
-            return;
-        }
-        self.spawner
-            .spawn(tone_ranges_task(&[(500, 1000), (300, 1000), (100, 1000)]).unwrap());
-    }
-
-    /// 推箱子移动音效
-    pub async fn sokoban_move(&mut self) {
-        if !self.open {
-            return;
-        }
-        self.spawner.spawn(tone_task(5000, 100).unwrap());
-    }
-
-    /// 推箱子过关音效
-    pub async fn sokoban_complete(&mut self) {
-        if !self.open {
-            return;
-        }
-        self.spawner
-            .spawn(tone_ranges_task(&[(2000, 200), (3000, 200), (4000, 200), (5000, 400)]).unwrap());
-    }
-
-    /// 躲避方块移动音效
-    pub async fn dodge_cube_move(&mut self) {
-        if !self.open {
-            return;
-        }
-        self.spawner.spawn(tone_task(5000, 100).unwrap());
-    }
-
-    /// 躲避方块得分音效
-    pub async fn dodge_cube_score(&mut self) {
-        if !self.open {
-            return;
-        }
-        self.spawner
-            .spawn(tone_ranges_task(&[(2000, 500), (3000, 500), (4000, 500)]).unwrap());
-    }
-
-    /// 躲避方块死亡音效
-    pub async fn dodge_cube_die(&mut self) {
-        if !self.open {
-            return;
-        }
-        self.spawner
-            .spawn(tone_ranges_task(&[(500, 500), (300, 500), (100, 500)]).unwrap());
-    }
-
-    /// 方块人移动音效
-    pub async fn cube_man_move(&mut self) {
-        if !self.open {
-            return;
-        }
-        self.spawner.spawn(tone_task(5000, 100).unwrap());
-    }
-
-    /// 方块人得分音效
-    pub async fn cube_man_score(&mut self) {
-        if !self.open {
-            return;
-        }
-        self.spawner
-            .spawn(tone_ranges_task(&[(2000, 500), (3000, 500), (2000, 500)]).unwrap());
-    }
-
-    /// 方块人死亡音效
-    pub async fn cube_man_die(&mut self) {
-        if !self.open {
-            return;
-        }
-        self.spawner
-            .spawn(tone_ranges_task(&[(500, 1000), (300, 1000), (100, 1000)]).unwrap());
-    }
-
-    /// 休眠音效
-    pub async fn sleep(&mut self) {
-        if !self.open {
-            return;
-        }
-        self.spawner.spawn(tone_task(6000, 100).unwrap());
-    }
-
-    /// 休眠音效2
-    pub async fn sleep2(&mut self) {
-        if !self.open {
-            return;
-        }
-        self.spawner.spawn(
-            tone_task(
-                unsafe {
-                    CubeRng(rng().random() as u64).random_range(3000..=9000) as u32
-                },
-                100,
-            )
-            .unwrap(),
-        );
-    }
-
-    /// 眨眼音效
-    pub async fn blinky(&mut self) {
-        if !self.open {
-            return;
-        }
-        self.spawner.spawn(tone_task(8000, 100).unwrap());
-    }
-
-    /// 眨眼音效2
-    pub async fn blinky2(&mut self) {
-        if !self.open {
-            return;
-        }
-        self.spawner.spawn(tone_task(5000, 100).unwrap());
     }
 }
 
-#[embassy_executor::task]
-async fn tone_task(frequency: u32, duration: u64) {
-    let buzzer = unsafe { get_buzzer() };
-    buzzer.tone(frequency, duration).await;
-}
-
-#[embassy_executor::task]
-async fn tone_range_task(freq_range: Vec<u32>, duration: u64) {
-    let buzzer = unsafe { get_buzzer() };
-    for i in freq_range {
-        buzzer.tone(i, duration).await;
+/// 启动音效任务。`buzzer` 为持有蜂鸣器的 `&'static mut` 引用。
+pub fn start_player(spawner: Spawner, buzzer: &'static mut Buzzer<'static>) {
+    if let Ok(token) = sound_player(buzzer) {
+        spawner.spawn(token);
     }
 }
 
-#[embassy_executor::task]
-async fn tone_ranges_task(range: &'static [(u32, u64)]) {
-    let buzzer = unsafe { get_buzzer() };
-    for (freq, dur) in range {
-        buzzer.tone(*freq, *dur).await;
-    }
+/// 菜单选择音效
+pub async fn menu_select() {
+    play(SoundCmd::Tone(1500, 300));
+}
+
+/// 菜单确认音效
+pub async fn menu_confirm() {
+    play(SoundCmd::Range((400..2000).step_by(100).collect(), 50));
+}
+
+/// 菜单进入音效
+pub async fn menu_access() {
+    play(SoundCmd::Range(
+        (200..=3000).rev().step_by(200).collect(),
+        50,
+    ));
+}
+
+/// 八卦音效
+pub async fn bagua() {
+    play(SoundCmd::Range(
+        (200..=3000).rev().step_by(200).collect(),
+        50,
+    ));
+}
+
+/// 骰子音效
+pub async fn dice() {
+    play(SoundCmd::Range(
+        (200..=3000).rev().step_by(400).collect(),
+        50,
+    ));
+}
+
+/// 迷宫移动音效
+pub async fn maze_move() {
+    play(SoundCmd::Tone(5000, 100));
+}
+
+/// 迷宫结束音效
+pub async fn maze_over() {
+    play(SoundCmd::Ranges(&[
+        (6000, 100),
+        (6000, 100),
+        (6000, 100),
+        (6000, 150),
+    ]));
+}
+
+/// 休眠开启音效
+pub async fn hibernation() {
+    play(SoundCmd::Ranges(&[(8000, 100), (2500, 100), (800, 100)]));
+}
+
+/// 开机音效
+pub async fn power_on() {
+    play(SoundCmd::Ranges(&[(800, 200), (2500, 100), (8000, 200)]));
+}
+
+/// 唤醒音效
+pub async fn wakeup() {
+    play(SoundCmd::Ranges(&[(1500, 200), (8000, 200)]));
+}
+
+/// 沙漏像素闪烁音效
+pub async fn timer_pixel_blinky() {
+    play(SoundCmd::Tone(8000, 100));
+}
+
+/// 沙漏像素反弹音效
+pub async fn timer_pixel_rebound() {
+    play(SoundCmd::Tone(4000, 100));
+}
+
+/// 沙漏结束音效
+pub async fn timers_over() {
+    play(SoundCmd::Ranges(&[
+        (6000, 100),
+        (6000, 100),
+        (6000, 100),
+        (6000, 150),
+    ]));
+}
+
+/// 贪吃蛇移动音效
+pub async fn snake_move() {
+    play(SoundCmd::Tone(5000, 100));
+}
+
+/// 贪吃蛇得分音效
+pub async fn snake_score() {
+    play(SoundCmd::Ranges(&[
+        (2000, 1000),
+        (3000, 1000),
+        (2000, 1000),
+    ]));
+}
+
+/// 贪吃蛇死亡音效
+pub async fn snake_die() {
+    play(SoundCmd::Ranges(&[(500, 1000), (300, 1000), (100, 1000)]));
+}
+
+/// 推箱子移动音效
+pub async fn sokoban_move() {
+    play(SoundCmd::Tone(5000, 100));
+}
+
+/// 推箱子过关音效
+pub async fn sokoban_complete() {
+    play(SoundCmd::Ranges(&[
+        (2000, 200),
+        (3000, 200),
+        (4000, 200),
+        (5000, 400),
+    ]));
+}
+
+/// 躲避方块移动音效
+pub async fn dodge_cube_move() {
+    play(SoundCmd::Tone(5000, 100));
+}
+
+/// 躲避方块得分音效
+pub async fn dodge_cube_score() {
+    play(SoundCmd::Ranges(&[(2000, 500), (3000, 500), (4000, 500)]));
+}
+
+/// 躲避方块死亡音效
+pub async fn dodge_cube_die() {
+    play(SoundCmd::Ranges(&[(500, 500), (300, 500), (100, 500)]));
+}
+
+/// 方块人移动音效
+pub async fn cube_man_move() {
+    play(SoundCmd::Tone(5000, 100));
+}
+
+/// 方块人得分音效
+pub async fn cube_man_score() {
+    play(SoundCmd::Ranges(&[(2000, 500), (3000, 500), (2000, 500)]));
+}
+
+/// 方块人死亡音效
+pub async fn cube_man_die() {
+    play(SoundCmd::Ranges(&[(500, 1000), (300, 1000), (100, 1000)]));
+}
+
+/// 休眠音效
+pub async fn sleep() {
+    play(SoundCmd::Tone(6000, 100));
+}
+
+/// 休眠音效2
+pub async fn sleep2(random: u32) {
+    let freq = CubeRng(random as u64).random_range(3000..=9000) as u32;
+    play(SoundCmd::Tone(freq, 100));
+}
+
+/// 眨眼音效
+pub async fn blinky() {
+    play(SoundCmd::Tone(8000, 100));
+}
+
+/// 眨眼音效2
+pub async fn blinky2() {
+    play(SoundCmd::Tone(5000, 100));
+}
+
+/// 破记录音效
+pub async fn break_record_beep() {
+    play(SoundCmd::Tone(8000, 50));
 }

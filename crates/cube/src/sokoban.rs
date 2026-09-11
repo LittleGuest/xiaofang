@@ -1,16 +1,16 @@
 #![doc = include_str!("../../../rfcs/007_sokoban.md")]
 
 use crate::{
+    Ad, App, Point, buzzer,
     map::{Map, MapCell, Vision},
     player::Player,
-    Ad, App, Point, buzzer,
 };
 use alloc::vec::Vec;
 use embassy_time::Timer;
 use embedded_graphics_core::{
+    Pixel,
     pixelcolor::{BinaryColor, Rgb888},
     prelude::WebColors,
-    Pixel,
 };
 
 /// 预设的XSB关卡列表
@@ -99,7 +99,7 @@ impl Sokoban {
         let map = SokobanMap::from_xsb(xsb);
         let width = map.map.width;
         let height = map.map.height;
-        let player = Player::new((map.player.0 .0.x, map.player.0 .0.y).into());
+        let player = Player::new((map.player.0.0.x, map.player.0.0.y).into());
         let mut vision = Vision::new(width, height, player.pos);
         vision.update_data(&map.map);
         Sokoban {
@@ -117,7 +117,7 @@ impl Sokoban {
         let level_idx = self.level % SOKOBAN_LEVELS.len();
         let xsb = SOKOBAN_LEVELS[level_idx];
         let map = SokobanMap::from_xsb(xsb);
-        self.player = Player::new((map.player.0 .0.x, map.player.0 .0.y).into());
+        self.player = Player::new((map.player.0.0.x, map.player.0.0.y).into());
         self.vision = Vision::new(map.map.width, map.map.height, self.player.pos);
         self.vision.update_data(&map.map);
         self.map = map;
@@ -133,7 +133,7 @@ impl Sokoban {
 
             if self.game_over {
                 // 过关庆祝
-                unsafe { buzzer().sokoban_complete().await };
+                buzzer::sokoban_complete().await;
                 for _ in 0..3 {
                     app.ledc.clear_with_color(Rgb888::CSS_GREEN);
                     Timer::after_millis(200).await;
@@ -159,7 +159,7 @@ impl Sokoban {
                 if can_push {
                     let moved = self.player.r#move(app.ad);
                     if moved {
-                        unsafe { buzzer().sokoban_move().await };
+                        buzzer::sokoban_move().await;
                     }
                     // 玩家移动之后视野数据改变
                     self.vision.update(app.ad, &self.map.map);
@@ -187,10 +187,10 @@ impl Sokoban {
                     _ => {}
                 };
                 let is_box = boxs.iter().any(|m| {
-                    matches!(m.1, TargetType::Box) && m.0 .0.x == boxp.x && m.0 .0.y == boxp.y
+                    matches!(m.1, TargetType::Box) && m.0.0.x == boxp.x && m.0.0.y == boxp.y
                 });
                 let is_wall = self.map.map.data.iter().any(|m| {
-                    matches!(m.1, TargetType::Wall) && m.0 .0.x == boxp.x && m.0 .0.y == boxp.y
+                    matches!(m.1, TargetType::Wall) && m.0.0.x == boxp.x && m.0.0.y == boxp.y
                 });
                 if is_box || is_wall {
                     return false;
@@ -211,8 +211,8 @@ impl Sokoban {
 
     /// 检查是否过关：所有箱子都在目标点上
     fn check_complete(&mut self) {
-        let goals = self.map.goals.iter().map(|b| b.0 .0).collect::<Vec<_>>();
-        let all = self.map.boxs.iter().all(|b| goals.contains(&b.0 .0));
+        let goals = self.map.goals.iter().map(|b| b.0.0).collect::<Vec<_>>();
+        let all = self.map.boxs.iter().all(|b| goals.contains(&b.0.0));
         self.game_over = all;
     }
 
@@ -233,7 +233,7 @@ impl Sokoban {
             d.0.y -= vp.y;
         }
         // 箱子
-        let goals = self.map.goals.iter().map(|m| m.0 .0).collect::<Vec<_>>();
+        let goals = self.map.goals.iter().map(|m| m.0.0).collect::<Vec<_>>();
         for b in self.map.boxs.iter().map(|b| b.0) {
             // 青色表示箱子在目标点上
             let color = if goals.contains(&b.0) {
@@ -274,7 +274,7 @@ impl Sokoban {
             .map
             .data
             .iter()
-            .any(|c| c.1 == TargetType::Wall && c.0 .0.x == x && c.0 .0.y == y)
+            .any(|c| c.1 == TargetType::Wall && c.0.0.x == x && c.0.0.y == y)
     }
 }
 
@@ -354,14 +354,14 @@ impl SokobanMap {
             .map
             .data
             .iter()
-            .max_by(|c1, c2| c1.0 .0.y.cmp(&c2.0 .0.y))
-            .map_or(0, |c| (c.0 .0.y + 1) as usize);
+            .max_by(|c1, c2| c1.0.0.y.cmp(&c2.0.0.y))
+            .map_or(0, |c| (c.0.0.y + 1) as usize);
         map.map.width = map
             .map
             .data
             .iter()
-            .max_by(|c1, c2| c1.0 .0.x.cmp(&c2.0 .0.x))
-            .map_or(0, |c| (c.0 .0.x + 1) as usize);
+            .max_by(|c1, c2| c1.0.0.x.cmp(&c2.0.0.x))
+            .map_or(0, |c| (c.0.0.x + 1) as usize);
         map
     }
 

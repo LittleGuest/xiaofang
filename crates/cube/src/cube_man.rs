@@ -1,6 +1,6 @@
 #![doc = include_str!("../../../rfcs/006_cube_man.md")]
 
-use crate::{Ad, App, buzzer, rng};
+use crate::{Ad, App, buzzer};
 use alloc::{collections::VecDeque, vec::Vec};
 use cube_rand::CubeRng;
 use embassy_time::Timer;
@@ -10,6 +10,7 @@ use embedded_graphics_core::{
     pixelcolor::{BinaryColor, Rgb888},
     prelude::WebColors,
 };
+use esp_hal::rng::Rng;
 
 /// 是方块人就下一百层
 #[derive(Debug)]
@@ -56,7 +57,7 @@ impl CubeManGame {
 
         loop {
             if self.game_over {
-                unsafe { buzzer().cube_man_die().await };
+                buzzer::cube_man_die().await;
                 app.ledc.draw_score(self.score);
                 Timer::after_millis(1500).await;
                 if self.score > self.highest {
@@ -70,7 +71,8 @@ impl CubeManGame {
             app.check_pause().await;
             {
                 self.floors.pop_front();
-                self.floors.push_back(self.floor_gen.floor(self.depth));
+                self.floors
+                    .push_back(self.floor_gen.floor(self.depth, &mut app.rng));
                 self.floors.iter_mut().for_each(|f| {
                     if let Some(f) = f {
                         f.data.iter_mut().for_each(|f| f.0.y -= 1);
@@ -106,7 +108,7 @@ impl CubeManGame {
                 self.man.up();
                 self.calc_score();
                 self.score_flash = true;
-                unsafe { buzzer().cube_man_score().await };
+                buzzer::cube_man_score().await;
                 self.moving_on_floor(&floor, app).await;
             } else {
                 self.man.fall();
@@ -297,32 +299,36 @@ impl FloorGen {
     }
 
     /// 随机生成楼梯
-    fn random(level: usize) -> Option<Floor> {
+    fn random(level: usize, rng: &mut Rng) -> Option<Floor> {
         // 概率生成楼梯
-        let per = unsafe { CubeRng(rng().random() as u64).random_range(1..=10) };
+        let per = CubeRng(rng.random() as u64).random_range(1..=10);
         if per < 7 {
             return None;
         }
 
         // 楼梯长度随等级递减（增加难度）
-        let max_len = if level <= 30 { 5 } else if level <= 100 { 4 } else { 3 };
-        let len = unsafe { CubeRng(rng().random() as u64).random_range(3..=max_len) };
-        let start_x = unsafe {
-            CubeRng(rng().random() as u64).random_range(0..=(8 - len)) as i32
+        let max_len = if level <= 30 {
+            5
+        } else if level <= 100 {
+            4
+        } else {
+            3
         };
+        let len = CubeRng(rng.random() as u64).random_range(3..=max_len);
+        let start_x = CubeRng(rng.random() as u64).random_range(0..=(8 - len)) as i32;
         let mut data = Vec::<Point>::with_capacity(len);
         for i in 0..len {
             data.push(Point::new(start_x + i as i32, 0));
         }
 
         // 随机选择楼梯类型，概率随等级调整
-        let r = unsafe { CubeRng(rng().random() as u64).random_range(1..=10) };
+        let r = CubeRng(rng.random() as u64).random_range(1..=10);
         let floor = if level <= 10 || r <= 5 {
             Floor::new(FloorType::Normal, &data)
         } else if r <= 7 {
             Floor::new(FloorType::Fragile(500), &data)
         } else if r <= 9 {
-            let dir = if unsafe { CubeRng(rng().random() as u64).random_range(0..=1) } == 0 {
+            let dir = if CubeRng(rng.random() as u64).random_range(0..=1) == 0 {
                 ConveyorDir::Clockwise
             } else {
                 ConveyorDir::Counterclockwise
@@ -335,29 +341,29 @@ impl FloorGen {
     }
 
     /// 生成楼梯，y坐标为8
-    fn floor(&mut self, level: usize) -> Option<Floor> {
-        let mut floor = Self::random(level);
+    fn floor(&mut self, level: usize, rng: &mut Rng) -> Option<Floor> {
+        let mut floor = Self::random(level, rng);
         if let Some(ref mut floor) = floor {
             floor.data.iter_mut().for_each(|f| f.0.y = 8);
         }
         floor
     }
 
-    fn floors(&mut self, level: usize) -> VecDeque<Option<Floor>> {
+    fn floors(&mut self, level: usize, rng: &mut Rng) -> VecDeque<Option<Floor>> {
         let mut floors = VecDeque::<Option<Floor>>::new();
         floors.push_back(None);
         floors.push_back(None);
-        let mut floor = Self::random(level);
+        let mut floor = Self::random(level, rng);
         if let Some(ref mut floor) = floor {
             floor.data.iter_mut().for_each(|f| f.0.y = 8);
         }
         floors.push_back(floor);
 
-        let span = unsafe { CubeRng(rng().random() as u64).random_range(2..=6) };
+        let span = CubeRng(rng.random() as u64).random_range(2..=6);
         for _ in 0..span {
             floors.push_back(None);
         }
-        let mut floor = Self::random(level);
+        let mut floor = Self::random(level, rng);
         if let Some(ref mut floor) = floor {
             floor.data.iter_mut().for_each(|f| f.0.y += span as i32);
         }

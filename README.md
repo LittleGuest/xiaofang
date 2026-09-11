@@ -58,14 +58,18 @@
 | GND | GND   |      |
 | D0  | -     |      |
 
-## wokwi仿真
+## velxio模拟仿真
 
-```bash
-cargo install wokwi-server
-
-cargo b -r
-
-wokwi-server --chip esp32c3 --id 413175440833513473 target/riscv32imc-unknown-none-elf/release/cube
+```shell
+podman run -d \
+                    --name velxio \
+                    -p 3080:80 \
+                    -v velxio-data:/app/data \
+                    -v velxio-arduino-libs:/root/.arduino15 \
+                    -v velxio-arduino-user-libs:/root/Arduino \
+                    -v velxio-ccache:/var/cache/ccache \
+                    -v velxio-build:/var/lib/velxio-build \
+                    ghcr.io/davidmonterocrespo24/velxio:master
 ```
 
 ## 三方库
@@ -76,4 +80,4 @@ wokwi-server --chip esp32c3 --id 413175440833513473 target/riscv32imc-unknown-no
 
 ## 参考链接
 
-- https://blog.theembeddedrustacean.com/esp32-embedded-rust-at-the-hal-pwm-buzzer
+- <https://blog.theembeddedrustacean.com/esp32-embedded-rust-at-the-hal-pwm-buzzer>

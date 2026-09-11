@@ -3,12 +3,9 @@
 use crate::App;
 use alloc::vec::Vec;
 use embassy_time::Timer;
-use embedded_graphics_core::{
-    pixelcolor::Rgb888,
-    Pixel,
-};
-use micromath::F32Ext;
+use embedded_graphics_core::{Pixel, pixelcolor::Rgb888};
 use microfft::real::rfft_64;
+use micromath::F32Ext;
 
 /// 音乐频谱
 pub struct MusicSpectrum;

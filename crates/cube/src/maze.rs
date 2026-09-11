@@ -1,17 +1,18 @@
 #![doc = include_str!("../../../rfcs/005_maze.md")]
 
 use crate::{
+    Ad, App, CubeRng, Point, buzzer,
     map::{Map, Vision},
     player::Player,
-    Ad, App, CubeRng, Point, buzzer, rng,
 };
 use alloc::vec::Vec;
 use embassy_time::Timer;
 use embedded_graphics_core::{
+    Pixel,
     pixelcolor::{BinaryColor, Rgb888},
     prelude::{RgbColor, WebColors},
-    Pixel,
 };
+use esp_hal::rng::Rng;
 
 /// 迷宫
 /// 左上角为坐标原点,所有的坐标都为全局坐标
@@ -27,21 +28,18 @@ pub struct Maze {
 }
 
 impl Maze {
-    pub fn new(width: usize, height: usize) -> Self {
-        let map = MazeMap::new(width, height);
+    pub fn new(width: usize, height: usize, rng: &mut Rng) -> Self {
+        let map = MazeMap::new(width, height, rng);
         let pp = loop {
-            let pp = unsafe {
-                Point {
-                    x: CubeRng(rng().random() as u64).random_range(1..width) as i32,
-                    y: CubeRng(rng().random() as u64).random_range(1..height)
-                        as i32,
-                }
+            let pp = Point {
+                x: CubeRng(rng.random() as u64).random_range(1..width) as i32,
+                y: CubeRng(rng.random() as u64).random_range(1..height) as i32,
             };
             let md = map
                 .map
                 .data
                 .iter()
-                .any(|c| c.0 .0.x == pp.x && c.0 .0.y == pp.y);
+                .any(|c| c.0.0.x == pp.x && c.0.0.y == pp.y);
             if !md {
                 break pp;
             }
@@ -76,7 +74,7 @@ impl Maze {
                     app.ledc.clear();
                     Timer::after_millis(200).await;
                 }
-                unsafe { buzzer().maze_over().await };
+                buzzer::maze_over().await;
                 Timer::after_millis(1500).await;
                 break;
             }
@@ -86,7 +84,7 @@ impl Maze {
             if !self.hit_wall(app) {
                 let moved = self.player.r#move(app.ad);
                 if moved {
-                    unsafe { buzzer().maze_move().await };
+                    buzzer::maze_move().await;
                     // 玩家移动之后视野数据改变
                     self.vision.update(app.ad, &self.map.map);
                     // 游戏结束
@@ -148,7 +146,7 @@ impl Maze {
             .map
             .data
             .iter()
-            .any(|c| c.0 .0.x == x && c.0 .0.y == y)
+            .any(|c| c.0.0.x == x && c.0.0.y == y)
     }
 }
 
@@ -167,11 +165,11 @@ struct MazeMap {
 }
 
 impl MazeMap {
-    fn new(width: usize, height: usize) -> Self {
+    fn new(width: usize, height: usize, rng: &mut Rng) -> Self {
         // 使用地图生成算法生成地图 TODO: 迷宫大小,使用的算法都随机
         let maze = maze::Maze::new(width, height)
             .unwrap()
-            .generate(&mut unsafe { CubeRng(rng().random() as u64) });
+            .generate(&mut CubeRng(rng.random() as u64));
         let mut map = Map::new(width, height);
         for y in 0..height {
             for x in 0..width {
@@ -197,12 +195,7 @@ impl MazeMap {
 
         let w = self.map.width;
         let h = self.map.height;
-        let walls: Vec<(i32, i32)> = self
-            .map
-            .data
-            .iter()
-            .map(|c| (c.0 .0.x, c.0 .0.y))
-            .collect();
+        let walls: Vec<(i32, i32)> = self.map.data.iter().map(|c| (c.0.0.x, c.0.0.y)).collect();
 
         // distance[y][x] = 距离，usize::MAX 表示未访问
         let mut distance = alloc::vec![alloc::vec![usize::MAX; w]; h];

@@ -2,7 +2,7 @@ use core::fmt::Display;
 
 use crate::{Ad, Point};
 use alloc::vec::Vec;
-use embedded_graphics::{pixelcolor::Rgb888, Pixel};
+use embedded_graphics::{Pixel, pixelcolor::Rgb888};
 
 pub type MapCell<T = ()> = (Pixel<Rgb888>, T);
 
@@ -42,7 +42,7 @@ impl<const W: usize, const H: usize, T> Display for Vision<W, H, T> {
         let mut data = self
             .data
             .iter()
-            .map(|c| (c.0 .0.x, c.0 .0.y))
+            .map(|c| (c.0.0.x, c.0.0.y))
             .collect::<Vec<_>>();
         data.sort_by_key(|c| c.0);
         writeln!(f, "{data:?}")
@@ -104,21 +104,18 @@ impl<const W: usize, const H: usize, T: Clone> Vision<W, H, T> {
             self.data.clone_from(&map.data);
         } else if map.width < W {
             self.data = data
-                .filter(|d| d.0 .0.y >= y && d.0 .0.y < y + H as i32)
+                .filter(|d| d.0.0.y >= y && d.0.0.y < y + H as i32)
                 .cloned()
                 .collect::<Vec<_>>();
         } else if map.height < H {
             self.data = data
-                .filter(|d| d.0 .0.x >= x && d.0 .0.x < x + W as i32)
+                .filter(|d| d.0.0.x >= x && d.0.0.x < x + W as i32)
                 .cloned()
                 .collect::<Vec<_>>();
         } else {
             self.data = data
                 .filter(|d| {
-                    d.0 .0.x >= x
-                        && d.0 .0.x < x + W as i32
-                        && d.0 .0.y >= y
-                        && d.0 .0.y < y + H as i32
+                    d.0.0.x >= x && d.0.0.x < x + W as i32 && d.0.0.y >= y && d.0.0.y < y + H as i32
                 })
                 .cloned()
                 .collect::<Vec<_>>();

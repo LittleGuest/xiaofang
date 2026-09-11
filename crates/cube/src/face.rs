@@ -1,6 +1,5 @@
-use crate::{buzzer::Buzzer, ledc::LedControl, rng, buzzer as get_buzzer};
+use crate::{buzzer, ledc::LedControl};
 use alloc::vec::Vec;
-use cube_rand::CubeRng;
 use embassy_time::Timer;
 
 /// 表情
@@ -165,141 +164,10 @@ impl Face {
         self.pout_mouth();
     }
 
-    /// 眨眼动画
-    pub async fn blink_animate<'d>(
-        &mut self,
-        x: u8,
-        y: u8,
-        ledc: &mut LedControl<'d>,
-        buzzer: &mut Buzzer<'d>,
-    ) {
-        self.clear();
-
-        self.close_eyes();
-        self.laugh_mouth();
-        ledc.write_bytes(self.data);
-        Timer::after_millis(80).await;
-
-        buzzer.tone(6000, 50).await;
-
-        self.clear();
-        self.slack_eyes(x, y);
-        self.laugh_mouth();
-        ledc.write_bytes(self.data);
-        Timer::after_millis(500).await;
-    }
-
-    /// 休眠动画
-    pub async fn dormancy_animate<'d>(
-        &mut self,
-        ledc: &mut LedControl<'d>,
-        buzzer: &mut Buzzer<'d>,
-    ) {
-        self.clear();
-
-        let ex: u8 = 1;
-        let ey: u8 = 4;
-
-        // 东张西望
-        self.slack_face(ex, ey);
-        ledc.write_bytes(self.data);
-        Timer::after_millis(500).await;
-
-        buzzer.tone(6000, 50).await;
-
-        //呆滞眼左看
-        self.slack_face(ex - 1, ey);
-        ledc.write_bytes(self.data);
-        Timer::after_millis(400).await;
-
-        // 眼神复位
-        self.slack_face(ex, ey);
-        ledc.write_bytes(self.data);
-        Timer::after_millis(10).await;
-
-        buzzer.tone(6000, 50).await;
-
-        //呆滞眼右看
-        self.slack_face(ex + 1, ey);
-        ledc.write_bytes(self.data);
-        Timer::after_millis(500).await;
-
-        // 眼神复位
-        self.slack_face(ex, ey);
-        ledc.write_bytes(self.data);
-        Timer::after_millis(500).await;
-
-        //微笑
-        self.clear();
-        self.slack_eyes(ex, ey);
-        self.laugh_mouth();
-        ledc.write_bytes(self.data);
-        Timer::after_millis(1000).await;
-
-        //眨眼
-        for _ in 0..3 {
-            self.blink_animate(ex, ey, ledc, buzzer).await;
-            self.blink_animate(ex, ey, ledc, buzzer).await;
-            self.blink_animate(ex, ey, ledc, buzzer).await;
-        }
-
-        for _ in 0..6 {
-            let freq =
-                unsafe { CubeRng(rng().random() as u64).random_range(3000..=9000) };
-            buzzer.tone(freq as u32, 50).await;
-
-            // 呆滞嘴
-            self.slack_face(ex, ey);
-            ledc.write_bytes(self.data);
-            Timer::after_millis(100).await;
-
-            let freq =
-                unsafe { CubeRng(rng().random() as u64).random_range(3000..=9000) };
-            buzzer.tone(freq as u32, 50).await;
-
-            // 嘟嘴
-            self.pout_face(ex, ey);
-            ledc.write_bytes(self.data);
-            Timer::after_millis(200).await;
-        }
-
-        //眨眼等待
-        for _ in 0..2 {
-            self.blink_animate(ex, ey, ledc, buzzer).await;
-            self.blink_animate(ex, ey, ledc, buzzer).await;
-        }
-    }
-
-    /// 唤醒动画
-    pub async fn wakeup_animate<'d>(&mut self, ledc: &mut LedControl<'d>, buzzer: &mut Buzzer<'d>) {
-        let ex: u8 = 1;
-        let ey: u8 = 4;
-
-        for _ in 0..2 {
-            buzzer.tone(8000, 50).await;
-            self.clear();
-            self.close_eyes();
-            self.slack_mouth();
-            ledc.write_bytes(self.data);
-            Timer::after_millis(100).await;
-
-            self.clear();
-            self.slack_eyes(ex, ey);
-            self.slack_mouth();
-            ledc.write_bytes(self.data);
-            Timer::after_millis(700).await;
-        }
-    }
-
     /// 破记录动画
-    pub async fn break_record_animate<'d>(
-        &mut self,
-        ledc: &mut LedControl<'d>,
-        // buzzer: &mut Buzzer<'d>,
-    ) {
+    pub async fn break_record_animate<'d>(&mut self, ledc: &mut LedControl<'d>) {
         let ex = 1;
         let ey = 4;
-        let buzzer = unsafe { get_buzzer() };
 
         for _ in 0..3 {
             self.clear();
@@ -308,7 +176,7 @@ impl Face {
             ledc.write_bytes(self.data);
             Timer::after_millis(500).await;
 
-            buzzer.tone(8000, 50).await;
+            buzzer::break_record_beep().await;
 
             self.clear();
             self.close_eyes();

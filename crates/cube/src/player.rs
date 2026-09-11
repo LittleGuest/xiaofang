@@ -1,7 +1,7 @@
 use crate::{Ad, Color, Point};
 use embedded_graphics::{
-    pixelcolor::{Rgb888, WebColors},
     Pixel,
+    pixelcolor::{Rgb888, WebColors},
 };
 
 /// 玩家

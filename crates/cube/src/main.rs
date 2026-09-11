@@ -11,7 +11,7 @@ use esp_hal::clock::CpuClock;
 use esp_hal::timer::timg::TimerGroup;
 use esp_radio::ble::controller::BleConnector;
 
-use defmt::error;
+use defmt::{error, info};
 use esp_println as _;
 
 use cube::buzzer::Buzzer;
@@ -50,17 +50,14 @@ async fn main(spawner: Spawner) {
     // COEX needs more RAM - so we've added some more
     esp_alloc::heap_allocator!(size: 64 * 1024);
 
-    // let timer0 = SystemTimer::new(peripherals.SYSTIMER);
-    // info!("初始化 embassy");
-    // // FIXME : esp_hal_embassy::init(timer0.alarm0);
-    // info!("初始化 embassy 完成");
-
     let rng = esp_hal::rng::Rng::new();
-    unsafe { cube::init_rng(rng) };
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     let sw_interrupt =
         esp_hal::interrupt::software::SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
+
+    info!("Embassy initialized!");
+
     let (mut _wifi_controller, _interfaces) =
         esp_radio::wifi::new(peripherals.WIFI, Default::default())
             .expect("Failed to initialize Wi-Fi controller");
@@ -68,8 +65,9 @@ async fn main(spawner: Spawner) {
 
     let mut ledc = Ledc::new(peripherals.LEDC);
     ledc.set_global_slow_clock(LSGlobalClkSource::APBClk);
-    let buzzer = Buzzer::new(peripherals.GPIO11, ledc, spawner);
-    unsafe { cube::init_buzzer(buzzer) };
+
+    let buzzer = cube::buzzer::BUZZER_CELL.init(Buzzer::new(peripherals.GPIO11, ledc));
+    cube::buzzer::start_player(spawner, buzzer);
 
     let i2c = I2c::new(peripherals.I2C0, i2c::master::Config::default())
         .unwrap()
@@ -84,7 +82,7 @@ async fn main(spawner: Spawner) {
         .with_mosi(peripherals.GPIO3);
     let ledc = LedControl::new(spi);
     let flash = FlashStorage::new(peripherals.FLASH);
-    cube::App::new(mpu, ledc, spawner, flash).run().await;
+    cube::App::new(mpu, ledc, spawner, flash, rng).run().await;
 }
 
 fn map_range(x: f32, in_min: f32, in_max: f32, out_min: f32, out_max: f32) -> f32 {
