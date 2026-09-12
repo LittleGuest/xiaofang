@@ -20,12 +20,14 @@ pub enum Ui {
     Sokoban,
     /// 躲避方块
     DodgeCube,
+    /// 对打球
+    PlayBall,
     /// 声音
     Sound,
 }
 
 impl Ui {
-    pub fn uis() -> [Ui; 10] {
+    pub fn uis() -> [Ui; 11] {
         [
             Ui::Timer,
             Ui::MusicSpectrum,
@@ -36,6 +38,7 @@ impl Ui {
             Ui::CubeMan,
             Ui::Sokoban,
             Ui::DodgeCube,
+            Ui::PlayBall,
             Ui::Sound,
         ]
     }
@@ -132,6 +135,16 @@ impl Ui {
                 0b10111110,
                 0b00000000,
                 0b00010000,
+            ],
+            Ui::PlayBall => [
+                0b10000001,
+                0b10000001,
+                0b10000101,
+                0b10010001,
+                0b10100001,
+                0b10000001,
+                0b10000001,
+                0b00000000,
             ],
             Ui::Sound => [
                 0b00000000,

@@ -269,6 +269,31 @@ pub async fn cube_man_die() {
     play(SoundCmd::Ranges(&[(500, 1000), (300, 1000), (100, 1000)]));
 }
 
+/// 对打球配对成功音效
+pub async fn pong_connect() {
+    play(SoundCmd::Ranges(&[(2000, 100), (3000, 100), (4000, 100)]));
+}
+
+/// 对打球击球音效
+pub async fn pong_hit() {
+    play(SoundCmd::Tone(6000, 80));
+}
+
+/// 对打球得分音效
+pub async fn pong_score() {
+    play(SoundCmd::Ranges(&[(2000, 200), (3000, 200), (4000, 200)]));
+}
+
+/// 对打球比赛结束音效
+pub async fn pong_over() {
+    play(SoundCmd::Ranges(&[
+        (4000, 200),
+        (3000, 200),
+        (2000, 200),
+        (1000, 400),
+    ]));
+}
+
 /// 休眠音效
 pub async fn sleep() {
     play(SoundCmd::Tone(6000, 100));

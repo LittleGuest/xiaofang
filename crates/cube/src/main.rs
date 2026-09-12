@@ -7,6 +7,7 @@
 )]
 #![deny(clippy::large_stack_frames)]
 
+use esp_hal::analog::adc::{Adc, AdcCalLine, AdcConfig, Attenuation};
 use esp_hal::clock::CpuClock;
 use esp_hal::timer::timg::TimerGroup;
 use esp_radio::ble::controller::BleConnector;
@@ -58,9 +59,20 @@ async fn main(spawner: Spawner) {
 
     info!("Embassy initialized!");
 
-    let (mut _wifi_controller, _interfaces) =
+    let (mut _wifi_controller, interfaces) =
         esp_radio::wifi::new(peripherals.WIFI, Default::default())
             .expect("Failed to initialize Wi-Fi controller");
+
+    // 取出 ESP-NOW 接口与本机 MAC，其余接口丢弃
+    let esp_now = interfaces.esp_now;
+    let my_mac = interfaces.station.mac_address();
+    info!(
+        "My MAC: {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+        my_mac[0], my_mac[1], my_mac[2], my_mac[3], my_mac[4], my_mac[5]
+    );
+    // 双方固定同一信道（ESP-NOW 联机对打）
+    esp_now.set_channel(6).ok();
+
     let _connector = BleConnector::new(peripherals.BT, Default::default());
 
     let mut ledc = Ledc::new(peripherals.LEDC);
@@ -82,45 +94,23 @@ async fn main(spawner: Spawner) {
         .with_mosi(peripherals.GPIO3);
     let ledc = LedControl::new(spi);
     let flash = FlashStorage::new(peripherals.FLASH);
-    cube::App::new(mpu, ledc, spawner, flash, rng).run().await;
+
+    // 麦克风 ADC 采样(GPIO0 = ADC1_CH0)
+    let mut adc_config = AdcConfig::new();
+    let mic_pin = adc_config
+        .enable_pin_with_cal::<_, AdcCalLine<esp_hal::peripherals::ADC1<'static>>>(
+            peripherals.GPIO0,
+            Attenuation::_11dB,
+        );
+    let adc = Adc::new(peripherals.ADC1, adc_config);
+
+    cube::App::new(
+        mpu, ledc, spawner, flash, rng, adc, mic_pin, esp_now, my_mac,
+    )
+    .run()
+    .await;
 }
 
 fn map_range(x: f32, in_min: f32, in_max: f32, out_min: f32, out_max: f32) -> f32 {
     (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 }
-
-// void displayUpdate(){
-//   color = 0;
-//   for(int i = 0; i < xres; i++){
-//     for(int j = 0; j < yres; j++){
-//       if(j <= Intensity[i]){                                // Light everything within the intensity range
-// //        if(j%2 == 0){
-// //          leds[(xres*(j+1))-i-1] = CHSV(color, 255, BRIGHTNESS);
-// //        }
-// //        else{
-// //          leds[(xres*j)+i] = CHSV(color, 255, BRIGHTNESS);
-// //        }
-//         if(j>freq_block[i]){
-//           freq_block[i] = min(j+1,8);
-//         }
-// leds[(xres*j)+i] = CHSV(color, 255, BRIGHTNESS);
-//       }
-//       else{                                                  // Everything outside the range goes dark
-// //        if(j%2 == 0){
-// //          leds[(xres*(j+1))-i-1] = CHSV(color, 255, 0);
-// //        }
-// //        else{
-// //          leds[(xres*j)+i] = CHSV(color, 255, 0);
-// //        }
-//         if(j == freq_block[i]){
-//           leds[(xres*j)+i] = CHSV(color, 0, BRIGHTNESS);//白色坠落点
-//         }else{
-//           leds[(xres*j)+i] = CHSV(color, 255, 0);
-//         }
-//
-//       }
-//     }
-//     color += 255/xres;             // Increment the Hue to get the Rainbow
-//
-//   }
-// }

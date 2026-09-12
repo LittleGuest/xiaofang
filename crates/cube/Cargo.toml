@@ -39,6 +39,7 @@ ws2812-spi.workspace = true
 cube_rand = { path = "../cube_rand/" }
 maze = { path = "../maze" }
 embassy-futures.workspace = true
+nb = "1.1"
 
 # For fine tuning these settings, please refer to https://doc.rust-lang.org/cargo/reference/profiles.html
 [profile.dev]

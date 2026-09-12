@@ -11,7 +11,8 @@ use embassy_executor::Spawner;
 use embassy_time::Timer;
 use embedded_graphics_core::pixelcolor::Rgb888;
 use embedded_storage::{ReadStorage, Storage};
-use esp_hal::{Blocking, i2c::master::I2c, rng::Rng};
+use esp_hal::{Blocking, analog::adc::{Adc, AdcCalLine, AdcPin}, i2c::master::I2c, rng::Rng};
+use esp_radio::esp_now::EspNow;
 use esp_storage::FlashStorage;
 use face::Face;
 use ledc::LedControl;
@@ -38,6 +39,7 @@ pub mod map;
 pub mod mapping;
 pub mod maze;
 pub mod music_spectrum;
+pub mod play_ball;
 pub mod player;
 pub mod snake;
 pub mod sokoban;
@@ -146,6 +148,19 @@ pub struct App<'d> {
     rng: Rng,
     flash: FlashStorage<'d>,
 
+    /// 麦克风 ADC(音乐频谱采样)
+    adc: Adc<'d, esp_hal::peripherals::ADC1<'d>, Blocking>,
+    mic_pin: AdcPin<
+        esp_hal::peripherals::GPIO0<'d>,
+        esp_hal::peripherals::ADC1<'d>,
+        AdcCalLine<esp_hal::peripherals::ADC1<'d>>,
+    >,
+
+    /// ESP-NOW 联机接口（对打球）
+    esp_now: Option<EspNow<'d>>,
+    /// 本机 MAC 地址
+    my_mac: [u8; 6],
+
     spawner: Spawner,
 }
 
@@ -200,12 +215,35 @@ impl<'d> App<'d> {
         }
     }
 
+    /// 从麦克风(ADC)采样一段音频,以 0 为中点归一化到 [-1,1]
+    pub fn sample_audio(&mut self, buf: &mut [f32]) {
+        let mid = 2048.0;
+        for s in buf.iter_mut() {
+            let raw = loop {
+                match self.adc.read_oneshot(&mut self.mic_pin) {
+                    Ok(v) => break v,
+                    Err(nb::Error::WouldBlock) => continue,
+                    Err(_) => break 2048,
+                }
+            };
+            *s = (raw as f32 - mid) / mid;
+        }
+    }
+
     pub fn new(
         mpu6050: Mpu6050<I2c<'d, Blocking>>,
         mut ledc: LedControl<'d>,
         spawner: Spawner,
         flash: FlashStorage<'d>,
         rng: Rng,
+        adc: Adc<'d, esp_hal::peripherals::ADC1<'d>, Blocking>,
+        mic_pin: AdcPin<
+            esp_hal::peripherals::GPIO0<'d>,
+            esp_hal::peripherals::ADC1<'d>,
+            AdcCalLine<esp_hal::peripherals::ADC1<'d>>,
+        >,
+        esp_now: EspNow<'d>,
+        my_mac: [u8; 6],
     ) -> Self {
         ledc.set_brightness(0x01);
 
@@ -219,6 +257,11 @@ impl<'d> App<'d> {
             ledc,
             rng,
             flash,
+            adc,
+            mic_pin,
+
+            esp_now: Some(esp_now),
+            my_mac,
 
             spawner,
         }
@@ -282,6 +325,7 @@ impl<'d> App<'d> {
                             self.flash.write(flash_addr, &flash_data).ok();
                         }
                         Ui::Sokoban => Sokoban::new().run(&mut self).await,
+                        Ui::PlayBall => play_ball::PlayBall::new().run(&mut self).await,
                         Ui::DodgeCube => {
                             let mut dc = DodgeCubeGame::new();
                             dc.highest = flash_data[0x02];
