@@ -15,18 +15,17 @@ impl MusicSpectrum {
         app.ledc.clear();
 
         loop {
-            // 1. 采样音频（ADC 暂用随机数据 stub）
+            // 1. 采样音频(真实 ADC 麦克风采样)
             let mut samples = [0.0f32; 64];
-            // TODO: 替换为 ADC 采样
-            // 当前使用模拟数据：基于时间的正弦波组合
-            for i in 0..64 {
-                let t = i as f32 / 64.0;
-                samples[i] = (t * 6.2832 * 3.0).sin() * 0.5
-                    + (t * 6.2832 * 7.0).sin() * 0.3
-                    + (t * 6.2832 * 12.0).sin() * 0.2;
+            app.sample_audio(&mut samples);
+
+            // 2. 加窗(降低频谱泄漏,改善频带显示)
+            for (i, s) in samples.iter_mut().enumerate() {
+                let w = 0.54 - 0.46 * (2.0 * core::f32::consts::PI * i as f32 / 63.0).cos();
+                *s *= w;
             }
 
-            // 2. FFT 计算
+            // 3. FFT 计算
             let spectrum = Self::compute_fft(&mut samples);
 
             // 3. 映射到 LED 显示
