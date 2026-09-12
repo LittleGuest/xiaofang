@@ -66,6 +66,16 @@ const SOKOBAN_LEVELS: &[&str] = &[
 ",
 ];
 
+/// 预设的LURD解答关卡列表(运行时用from_lurd还原成地图)
+const SOKOBAN_LURD_LEVELS: &[&str] = &[
+    // Classic level 1 (Thinking Rabbit)
+    "ullluuuLUllDlldddrRRRRRRRRRRdrUllllllluuululldDDuu\
+lldddrRRRRRRRRRRRRlllllllluuulLulDDDuulldddrRRRRRR\
+RRRRRllllllluuulluuurDDuullDDDDDuulldddrRRRRRRRRRR\
+uRRlDllllllluuuLLulDDDuulldddrRRRRRRRRRRdRRlUlllll\
+lllllllulldRRRRRRRRRRRRRuRDldR",
+];
+
 /// 推箱子
 /// 左上角为坐标原点,所有的坐标都为全局坐标
 /// 如果地图大小大于8*8,led是显示不完整的,就要添加一个视野的效果
@@ -93,10 +103,18 @@ impl Sokoban {
         Self::new_with_level(0)
     }
 
+    /// 按关卡序号生成地图:预设的XSB关卡用尽后,从LURD解答还原关卡
+    fn level_map(level: usize) -> SokobanMap {
+        if level < SOKOBAN_LEVELS.len() {
+            SokobanMap::from_xsb(SOKOBAN_LEVELS[level])
+        } else {
+            let idx = (level - SOKOBAN_LEVELS.len()) % SOKOBAN_LURD_LEVELS.len();
+            SokobanMap::from_lurd(SOKOBAN_LURD_LEVELS[idx])
+        }
+    }
+
     pub fn new_with_level(level: usize) -> Self {
-        let level_idx = level % SOKOBAN_LEVELS.len();
-        let xsb = SOKOBAN_LEVELS[level_idx];
-        let map = SokobanMap::from_xsb(xsb);
+        let map = Self::level_map(level);
         let width = map.map.width;
         let height = map.map.height;
         let player = Player::new((map.player.0.0.x, map.player.0.0.y).into());
@@ -114,9 +132,7 @@ impl Sokoban {
 
     /// 重载当前关卡
     fn reload_level(&mut self) {
-        let level_idx = self.level % SOKOBAN_LEVELS.len();
-        let xsb = SOKOBAN_LEVELS[level_idx];
-        let map = SokobanMap::from_xsb(xsb);
+        let map = Self::level_map(self.level);
         self.player = Player::new((map.player.0.0.x, map.player.0.0.y).into());
         self.vision = Vision::new(map.map.width, map.map.height, self.player.pos);
         self.vision.update_data(&map.map);
@@ -294,6 +310,13 @@ enum TargetType {
     Floor,
 }
 
+/// LURD还原时地图格子的位标志
+const LURD_FLOOR: u8 = 1;
+const LURD_GOAL: u8 = 2;
+const LURD_BOX: u8 = 4;
+/// 被墙包围的不可达空格(砖块),游戏中和墙等价
+const LURD_BRICK: u8 = 8;
+
 /// 迷宫地图
 #[derive(Debug, Default)]
 struct SokobanMap<T = TargetType> {
@@ -307,15 +330,18 @@ struct SokobanMap<T = TargetType> {
 }
 
 impl SokobanMap {
-    fn new() -> Self {
-        Self::from_xsb(SOKOBAN_LEVELS[0])
-    }
-
     /// 根据XSB生成地图
+    ///
+    /// `-`、`_`和空格都表示地板,地板没有颜色,不进入地图数据
     fn from_xsb(xsb: &str) -> Self {
         let mut map = Self::default();
+        // 宽高从行结构计算,不依赖数据格(地板行/列可能没有墙和目标点)
+        let mut width = 0usize;
+        let mut height = 0usize;
         for (y, line) in xsb.trim().lines().enumerate() {
             let y = y as i32;
+            height += 1;
+            width = width.max(line.chars().count());
             for (x, char) in line.chars().enumerate() {
                 let x = x as i32;
                 match char {
@@ -326,6 +352,7 @@ impl SokobanMap {
                         map.player = (Pixel((x, y).into(), Rgb888::CSS_RED), TargetType::Man);
                         let goal = (Pixel((x, y).into(), Rgb888::CSS_GREEN), TargetType::Goal);
                         map.goals.push(goal);
+                        map.map.data.push(goal);
                     }
                     '$' => {
                         map.boxs
@@ -336,6 +363,7 @@ impl SokobanMap {
                             .push((Pixel((x, y).into(), Rgb888::CSS_BLUE), TargetType::Box));
                         let goal = (Pixel((x, y).into(), Rgb888::CSS_GREEN), TargetType::Goal);
                         map.goals.push(goal);
+                        map.map.data.push(goal);
                     }
                     '#' => {
                         let wall = (Pixel((x, y).into(), Rgb888::CSS_WHITE), TargetType::Wall);
@@ -346,27 +374,189 @@ impl SokobanMap {
                         map.goals.push(goal);
                         map.map.data.push(goal);
                     }
+                    '-' | '_' | ' ' => {}
                     _ => {}
                 }
             }
         }
-        map.map.height = map
-            .map
-            .data
-            .iter()
-            .max_by(|c1, c2| c1.0.0.y.cmp(&c2.0.0.y))
-            .map_or(0, |c| (c.0.0.y + 1) as usize);
-        map.map.width = map
-            .map
-            .data
-            .iter()
-            .max_by(|c1, c2| c1.0.0.x.cmp(&c2.0.0.x))
-            .map_or(0, |c| (c.0.0.x + 1) as usize);
+        map.map.height = height;
+        map.map.width = width;
         map
     }
 
-    /// 根据LURD生成地图（待实现）
-    fn from_lurd(_lurd: &str) -> Self {
-        unimplemented!()
+    /// 根据LURD解答还原关卡地图
+    ///
+    /// 从解答的最后一步往前倒推,推算出正推的初始状态(玩家位置、箱子位置、目标点)。
+    /// 解答必须是合法的,否则还原出的地图无意义。
+    fn from_lurd(lurd: &str) -> Self {
+        // 倒推计算玩家活动的边界范围
+        let (mut min_x, mut max_x, mut min_y, mut max_y) = (0i32, 0i32, 0i32, 0i32);
+        let (mut x, mut y) = (0i32, 0i32);
+        for c in lurd.chars().rev() {
+            match c {
+                'l' | 'L' => x += 1,
+                'r' | 'R' => x -= 1,
+                'u' | 'U' => y += 1,
+                'd' | 'D' => y -= 1,
+                _ => {}
+            }
+            min_x = min_x.min(x);
+            max_x = max_x.max(x);
+            min_y = min_y.min(y);
+            max_y = max_y.max(y);
+        }
+
+        // 地图四周加3格墙边距,防止倒推时越界
+        let width = (max_x - min_x + 1 + 6) as usize;
+        let height = (max_y - min_y + 1 + 6) as usize;
+        let mut cells = alloc::vec![0u8; width * height];
+        let idx = |x: i32, y: i32| y as usize * width + x as usize;
+        let (mut man_x, mut man_y) = (3 - min_x, 3 - min_y);
+        cells[idx(man_x, man_y)] |= LURD_FLOOR;
+
+        /// 倒推"左右推动":玩家反向移动,箱子反向移回,标记目标点/箱子/地板
+        fn push_horizontal(cells: &mut [u8], width: usize, man_x: &mut i32, man_y: i32, step: i32) {
+            *man_x += step;
+            let i = man_y as usize * width + *man_x as usize;
+            if cells[i] & LURD_BOX != 0 {
+                cells[i] &= !LURD_BOX;
+            } else {
+                cells[i] |= LURD_GOAL;
+            }
+            *man_x -= step;
+            cells[man_y as usize * width + *man_x as usize] |= LURD_BOX;
+            *man_x -= step;
+            cells[man_y as usize * width + *man_x as usize] |= LURD_FLOOR;
+        }
+
+        /// 倒推"上下推动"
+        fn push_vertical(cells: &mut [u8], width: usize, man_x: i32, man_y: &mut i32, step: i32) {
+            *man_y += step;
+            let i = *man_y as usize * width + man_x as usize;
+            if cells[i] & LURD_BOX != 0 {
+                cells[i] &= !LURD_BOX;
+            } else {
+                cells[i] |= LURD_GOAL;
+            }
+            *man_y -= step;
+            cells[*man_y as usize * width + man_x as usize] |= LURD_BOX;
+            *man_y -= step;
+            cells[*man_y as usize * width + man_x as usize] |= LURD_FLOOR;
+        }
+
+        // 倒推执行解答:小写字母是移动,大写字母是推动
+        for c in lurd.chars().rev() {
+            match c {
+                'l' => {
+                    man_x += 1;
+                    cells[idx(man_x, man_y)] |= LURD_FLOOR;
+                }
+                'r' => {
+                    man_x -= 1;
+                    cells[idx(man_x, man_y)] |= LURD_FLOOR;
+                }
+                'u' => {
+                    man_y += 1;
+                    cells[idx(man_x, man_y)] |= LURD_FLOOR;
+                }
+                'd' => {
+                    man_y -= 1;
+                    cells[idx(man_x, man_y)] |= LURD_FLOOR;
+                }
+                'L' => push_horizontal(&mut cells, width, &mut man_x, man_y, -1),
+                'R' => push_horizontal(&mut cells, width, &mut man_x, man_y, 1),
+                'U' => push_vertical(&mut cells, width, man_x, &mut man_y, -1),
+                'D' => push_vertical(&mut cells, width, man_x, &mut man_y, 1),
+                _ => {}
+            }
+        }
+
+        // 标记砖块:完全被墙包围的空格(不可达区域),用于后续裁剪出最简地图
+        if width > 2 && height > 2 {
+            let solid = |v: u8| v & (LURD_FLOOR | LURD_GOAL | LURD_BOX) == 0;
+            for yy in 1..height - 1 {
+                for xx in 1..width - 1 {
+                    let i = yy * width + xx;
+                    if cells[i] != 0 {
+                        continue;
+                    }
+                    if solid(cells[i - width - 1])
+                        && solid(cells[i - width])
+                        && solid(cells[i - width + 1])
+                        && solid(cells[i - 1])
+                        && solid(cells[i + 1])
+                        && solid(cells[i + width - 1])
+                        && solid(cells[i + width])
+                        && solid(cells[i + width + 1])
+                    {
+                        cells[i] = LURD_BRICK;
+                    }
+                }
+            }
+        }
+
+        // 裁剪:去掉全为砖块的边缘行列(砖块不可达,可安全移除)
+        let mut x0 = 1usize;
+        let mut y0 = 1usize;
+        let mut x1 = width.saturating_sub(2);
+        let mut y1 = height.saturating_sub(2);
+        while x0 <= x1 && (y0..=y1).all(|yy| cells[yy * width + x0] == LURD_BRICK) {
+            x0 += 1;
+        }
+        while x0 <= x1 && (y0..=y1).all(|yy| cells[yy * width + x1] == LURD_BRICK) {
+            x1 -= 1;
+        }
+        while y0 <= y1 && (x0..=x1).all(|xx| cells[y0 * width + xx] == LURD_BRICK) {
+            y0 += 1;
+        }
+        while y0 <= y1 && (x0..=x1).all(|xx| cells[y1 * width + xx] == LURD_BRICK) {
+            y1 -= 1;
+        }
+        if x1 < x0 || y1 < y0 {
+            return Self::default();
+        }
+
+        let mut map = Self::default();
+        for yy in y0..=y1 {
+            for xx in x0..=x1 {
+                let cell = cells[yy * width + xx];
+                let px = (xx - x0) as i32;
+                let py = (yy - y0) as i32;
+                if cell & LURD_GOAL != 0 {
+                    // 目标点
+                    if man_x == xx as i32 && man_y == yy as i32 {
+                        // 人在目标点上,目标点也要记录
+                        map.player = (Pixel((px, py).into(), Rgb888::CSS_RED), TargetType::Man);
+                        let goal = (Pixel((px, py).into(), Rgb888::CSS_GREEN), TargetType::Goal);
+                        map.goals.push(goal);
+                        map.map.data.push(goal);
+                    } else if cell & LURD_BOX != 0 {
+                        map.boxs.push((Pixel((px, py).into(), Rgb888::CSS_BLUE), TargetType::Box));
+                        let goal = (Pixel((px, py).into(), Rgb888::CSS_GREEN), TargetType::Goal);
+                        map.goals.push(goal);
+                        map.map.data.push(goal);
+                    } else {
+                        let goal = (Pixel((px, py).into(), Rgb888::CSS_GREEN), TargetType::Goal);
+                        map.goals.push(goal);
+                        map.map.data.push(goal);
+                    }
+                } else if cell & LURD_FLOOR != 0 {
+                    // 地板
+                    if man_x == xx as i32 && man_y == yy as i32 {
+                        map.player = (Pixel((px, py).into(), Rgb888::CSS_RED), TargetType::Man);
+                    } else if cell & LURD_BOX != 0 {
+                        map.boxs.push((Pixel((px, py).into(), Rgb888::CSS_BLUE), TargetType::Box));
+                    }
+                } else {
+                    // 墙
+                    map.map
+                        .data
+                        .push((Pixel((px, py).into(), Rgb888::CSS_WHITE), TargetType::Wall));
+                }
+            }
+        }
+        map.map.width = x1 - x0 + 1;
+        map.map.height = y1 - y0 + 1;
+        map
     }
 }
