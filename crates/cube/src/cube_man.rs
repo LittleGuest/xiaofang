@@ -36,10 +36,13 @@ impl Default for CubeManGame {
 
 impl CubeManGame {
     pub fn new() -> Self {
-        let floors = FloorGen::init();
+        let mut floors = FloorGen::init();
+        // 人物最开始站在正常的楼梯上
+        let data: Vec<Point> = (2..=4).map(|x| Point::new(x, 7)).collect();
+        floors[2] = Some(Floor::new(FloorType::Normal, &data));
 
         Self {
-            man: CubeMan::new((0, 0).into()),
+            man: CubeMan::new((3, 5).into()),
             floors,
             floor_gen: FloorGen::new(),
             depth: 0,
@@ -80,8 +83,9 @@ impl CubeManGame {
                 });
             }
             self.r#move(app).await;
-            // TODO: 移动音效,得分音效和画面效果,死亡音效
             self.draw(app);
+            // 随游戏进度加快下落速度,越往后越快(下限 80ms)
+            self.waiting_time = 230u64.saturating_sub(self.depth as u64 * 2).max(80);
 
             Timer::after_millis(self.waiting_time).await;
             self.depth += 1;
@@ -95,6 +99,10 @@ impl CubeManGame {
         } else if self.hit_wall(&np) {
         } else {
             self.man.r#move(app);
+            // 左右移动音效
+            if app.ad == Ad::Left || app.ad == Ad::Right {
+                buzzer::cube_man_move().await;
+            }
             // 如果下面是楼梯,在停在楼梯上
             if let Some(floor) = Self::on_floor(
                 &self
@@ -162,9 +170,62 @@ impl CubeManGame {
                 Timer::after_millis(*t).await;
             }
             FloorType::Conveyor(cd) => {
+                // 玩家操纵时不受传送带影响
                 if app.ad == Ad::Left || app.ad == Ad::Right {
                     return;
                 }
+
+                // 传送带旋转动画:两端常绿,中间从一端向另一端扫动
+                let mut cols: Vec<Point> = floor.data.iter().map(|p| p.0).collect();
+                cols.sort_by_key(|p| p.x);
+                if cols.len() >= 3 {
+                    let ints: Vec<Point> = cols[1..cols.len() - 1].to_vec();
+                    for _ in 0..2 {
+                        match cd {
+                            ConveyorDir::Clockwise => {
+                                // 中间从左到右扫动
+                                for i in 0..ints.len() {
+                                    let px = ints
+                                        .iter()
+                                        .enumerate()
+                                        .map(|(j, p)| {
+                                            let c = if j <= i {
+                                                Rgb888::CSS_WHITE
+                                            } else {
+                                                RgbColor::GREEN
+                                            };
+                                            Pixel(*p, c)
+                                        })
+                                        .collect::<Vec<_>>();
+                                    app.ledc.write_pixels(px);
+                                    Timer::after_millis(30).await;
+                                }
+                            }
+                            ConveyorDir::Counterclockwise => {
+                                // 中间从右到左扫动
+                                for i in (0..ints.len()).rev() {
+                                    let px = ints
+                                        .iter()
+                                        .enumerate()
+                                        .map(|(j, p)| {
+                                            let c = if j >= i {
+                                                Rgb888::CSS_WHITE
+                                            } else {
+                                                RgbColor::GREEN
+                                            };
+                                            Pixel(*p, c)
+                                        })
+                                        .collect::<Vec<_>>();
+                                    app.ledc.write_pixels(px);
+                                    Timer::after_millis(30).await;
+                                }
+                            }
+                        }
+                    }
+                    // 恢复为绿色
+                    app.ledc.write_pixels(floor.data.clone());
+                }
+
                 match cd {
                     ConveyorDir::Clockwise => {
                         if self.man.pos.x + 1 < 8 {
@@ -257,7 +318,7 @@ impl Floor {
                 r#type: ft,
                 data: data
                     .iter()
-                    .map(|p| Pixel((p.x, p.y).into(), RgbColor::RED))
+                    .map(|p| Pixel((p.x, p.y).into(), Rgb888::new(0x80, 0x80, 0x80)))
                     .collect::<Vec<_>>(),
             },
             FloorType::Conveyor(_) => Self {
@@ -321,21 +382,20 @@ impl FloorGen {
             data.push(Point::new(start_x + i as i32, 0));
         }
 
-        // 随机选择楼梯类型，概率随等级调整
+        // 随机选择楼梯类型,概率参照 RFC: 正常70% / 易碎10% / 传送带10% / 弹簧10%
         let r = CubeRng(rng.random() as u64).random_range(1..=10);
-        let floor = if level <= 10 || r <= 5 {
-            Floor::new(FloorType::Normal, &data)
-        } else if r <= 7 {
-            Floor::new(FloorType::Fragile(500), &data)
-        } else if r <= 9 {
-            let dir = if CubeRng(rng.random() as u64).random_range(0..=1) == 0 {
-                ConveyorDir::Clockwise
-            } else {
-                ConveyorDir::Counterclockwise
-            };
-            Floor::new(FloorType::Conveyor(dir), &data)
-        } else {
-            Floor::new(FloorType::Spring(2), &data)
+        let floor = match r {
+            1 => Floor::new(FloorType::Fragile(500), &data),
+            2 => {
+                let dir = if CubeRng(rng.random() as u64).random_range(0..=1) == 0 {
+                    ConveyorDir::Clockwise
+                } else {
+                    ConveyorDir::Counterclockwise
+                };
+                Floor::new(FloorType::Conveyor(dir), &data)
+            }
+            3 => Floor::new(FloorType::Spring(2), &data),
+            _ => Floor::new(FloorType::Normal, &data),
         };
         Some(floor)
     }
