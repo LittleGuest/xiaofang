@@ -2,9 +2,9 @@
 
 #![no_std]
 
-use core::ops::{Bound, RangeBounds};
+use core::{convert::Infallible, ops::{Bound, RangeBounds}};
 
-use rand_core::RngCore;
+use rand_core::{Rng, TryRng};
 
 pub struct CubeRng(pub u64);
 
@@ -53,17 +53,20 @@ impl CubeRng {
     }
 }
 
-impl RngCore for CubeRng {
-    fn next_u32(&mut self) -> u32 {
-        self.next_u64() as u32
+impl TryRng for CubeRng {
+    type Error = Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Infallible> {
+        Ok(self.next_u64() as u32)
     }
 
-    fn next_u64(&mut self) -> u64 {
+    fn try_next_u64(&mut self) -> Result<u64, Infallible> {
         self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1);
-        self.0
+        Ok(self.0)
     }
 
-    fn fill_bytes(&mut self, dest: &mut [u8]) {
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Infallible> {
         self.fill_bytes(dest);
+        Ok(())
     }
 }
