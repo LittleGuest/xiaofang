@@ -1,25 +1,33 @@
-use crate::mapping;
 use defmt::error;
 use embedded_graphics::{pixelcolor::*, prelude::*};
-use esp_hal::{Blocking, spi::master::Spi};
+use esp_hal::Blocking;
+use esp_hal_smartled::{
+    RmtSmartLeds, buffer_size,
+    color_order::{self, Grb, Rgb},
+};
 use heapless::Vec;
+use smart_leds::RGB8;
 use smart_leds_matrix::{
     SmartLedMatrix,
     layout::{Rectangular, invert_axis::NoInvert},
 };
-use ws2812_spi::Ws2812;
+
+use crate::mapping;
 
 /// led 数量
 const NUM_LEDS: usize = 64;
 
 pub struct LedControl<'d> {
-    matrix: SmartLedMatrix<Ws2812<Spi<'d, Blocking>>, Rectangular<NoInvert>, NUM_LEDS>,
+    matrix: SmartLedMatrix<
+        RmtSmartLeds<'d, { buffer_size::<RGB8>(NUM_LEDS) }, Blocking, RGB8, Rgb>,
+        Rectangular<NoInvert>,
+        NUM_LEDS,
+    >,
 }
 
 impl<'d> LedControl<'d> {
-    pub fn new(spi: Spi<'d, Blocking>) -> Self {
-        let ws = Ws2812::new(spi);
-        let mut matrix = SmartLedMatrix::<_, _, { 8 * 8 }>::new(ws, Rectangular::new(8, 8));
+    pub fn new(led: RmtSmartLeds<'d, { buffer_size::<RGB8>(NUM_LEDS) }, Blocking, RGB8, Rgb>) -> Self {
+        let mut matrix = SmartLedMatrix::<_, _, { 8 * 8 }>::new(led, Rectangular::new(8, 8));
         matrix.set_brightness(1);
         matrix.clear(Rgb888::new(0, 0, 0)).unwrap();
 

@@ -1,16 +1,16 @@
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicBool, Ordering};
+
 use cube_rand::CubeRng;
 use embassy_executor::Spawner;
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::channel::Channel;
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use embassy_time::Timer;
-use esp_hal::gpio::{DriveMode, Level, Output, OutputConfig};
-use esp_hal::ledc::channel::ChannelIFace as _;
-use esp_hal::ledc::timer::TimerIFace;
-use esp_hal::ledc::{Ledc, LowSpeed, channel, timer};
-use esp_hal::peripherals::GPIO11;
-use esp_hal::time::Rate;
+use esp_hal::{
+    gpio::{DriveMode, Level, Output, OutputConfig},
+    ledc::{Ledc, LowSpeed, channel, channel::ChannelIFace as _, timer, timer::TimerIFace},
+    peripherals::GPIO11,
+    time::Rate,
+};
 use static_cell::StaticCell;
 
 pub static BUZZER_CELL: StaticCell<Buzzer<'static>> = StaticCell::new();
@@ -133,26 +133,17 @@ pub async fn menu_confirm() {
 
 /// 菜单进入音效
 pub async fn menu_access() {
-    play(SoundCmd::Range(
-        (200..=3000).rev().step_by(200).collect(),
-        50,
-    ));
+    play(SoundCmd::Range((200..=3000).rev().step_by(200).collect(), 50));
 }
 
 /// 八卦音效
 pub async fn bagua() {
-    play(SoundCmd::Range(
-        (200..=3000).rev().step_by(200).collect(),
-        50,
-    ));
+    play(SoundCmd::Range((200..=3000).rev().step_by(200).collect(), 50));
 }
 
 /// 骰子音效
 pub async fn dice() {
-    play(SoundCmd::Range(
-        (200..=3000).rev().step_by(400).collect(),
-        50,
-    ));
+    play(SoundCmd::Range((200..=3000).rev().step_by(400).collect(), 50));
 }
 
 /// 迷宫移动音效
@@ -162,12 +153,7 @@ pub async fn maze_move() {
 
 /// 迷宫结束音效
 pub async fn maze_over() {
-    play(SoundCmd::Ranges(&[
-        (6000, 100),
-        (6000, 100),
-        (6000, 100),
-        (6000, 150),
-    ]));
+    play(SoundCmd::Ranges(&[(6000, 100), (6000, 100), (6000, 100), (6000, 150)]));
 }
 
 /// 休眠开启音效
@@ -197,12 +183,7 @@ pub async fn timer_pixel_rebound() {
 
 /// 沙漏结束音效
 pub async fn timers_over() {
-    play(SoundCmd::Ranges(&[
-        (6000, 100),
-        (6000, 100),
-        (6000, 100),
-        (6000, 150),
-    ]));
+    play(SoundCmd::Ranges(&[(6000, 100), (6000, 100), (6000, 100), (6000, 150)]));
 }
 
 /// 贪吃蛇移动音效
@@ -212,11 +193,7 @@ pub async fn snake_move() {
 
 /// 贪吃蛇得分音效
 pub async fn snake_score() {
-    play(SoundCmd::Ranges(&[
-        (2000, 1000),
-        (3000, 1000),
-        (2000, 1000),
-    ]));
+    play(SoundCmd::Ranges(&[(2000, 1000), (3000, 1000), (2000, 1000)]));
 }
 
 /// 贪吃蛇死亡音效
@@ -231,12 +208,7 @@ pub async fn sokoban_move() {
 
 /// 推箱子过关音效
 pub async fn sokoban_complete() {
-    play(SoundCmd::Ranges(&[
-        (2000, 200),
-        (3000, 200),
-        (4000, 200),
-        (5000, 400),
-    ]));
+    play(SoundCmd::Ranges(&[(2000, 200), (3000, 200), (4000, 200), (5000, 400)]));
 }
 
 /// 躲避方块移动音效
@@ -286,12 +258,7 @@ pub async fn pong_score() {
 
 /// 对打球比赛结束音效
 pub async fn pong_over() {
-    play(SoundCmd::Ranges(&[
-        (4000, 200),
-        (3000, 200),
-        (2000, 200),
-        (1000, 400),
-    ]));
+    play(SoundCmd::Ranges(&[(4000, 200), (3000, 200), (2000, 200), (1000, 400)]));
 }
 
 /// 休眠音效

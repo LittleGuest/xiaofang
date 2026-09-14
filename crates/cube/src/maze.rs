@@ -1,11 +1,7 @@
 #![doc = include_str!("../../../rfcs/005_maze.md")]
 
-use crate::{
-    Ad, App, CubeRng, Point, buzzer,
-    map::{Map, Vision},
-    player::Player,
-};
 use alloc::vec::Vec;
+
 use embassy_time::Timer;
 use embedded_graphics_core::{
     Pixel,
@@ -13,6 +9,12 @@ use embedded_graphics_core::{
     prelude::{RgbColor, WebColors},
 };
 use esp_hal::rng::Rng;
+
+use crate::{
+    Ad, App, CubeRng, Point, buzzer,
+    map::{Map, Vision},
+    player::Player,
+};
 
 /// 迷宫
 /// 左上角为坐标原点,所有的坐标都为全局坐标
@@ -35,11 +37,7 @@ impl Maze {
                 x: CubeRng(rng.random() as u64).random_range(1..width) as i32,
                 y: CubeRng(rng.random() as u64).random_range(1..height) as i32,
             };
-            let md = map
-                .map
-                .data
-                .iter()
-                .any(|c| c.0.0.x == pp.x && c.0.0.y == pp.y);
+            let md = map.map.data.iter().any(|c| c.0.0.x == pp.x && c.0.0.y == pp.y);
             if !md {
                 break pp;
             }
@@ -88,8 +86,7 @@ impl Maze {
                     // 玩家移动之后视野数据改变
                     self.vision.update(app.ad, &self.map.map);
                     // 游戏结束
-                    if self.player.pos.x == self.map.epos.x && self.player.pos.y == self.map.epos.y
-                    {
+                    if self.player.pos.x == self.map.epos.x && self.player.pos.y == self.map.epos.y {
                         self.game_over = true;
                     }
                 }
@@ -101,14 +98,7 @@ impl Maze {
     fn draw(&mut self, app: &mut App<'_>) {
         app.ledc.clear_with_color(BinaryColor::Off.into());
         let vp = self.vision.pos;
-        let mut pixels = self
-            .map
-            .map
-            .data
-            .iter()
-            .map(|m| m.0)
-            .clone()
-            .collect::<Vec<_>>();
+        let mut pixels = self.map.map.data.iter().map(|m| m.0).clone().collect::<Vec<_>>();
         // 将全局坐标转换为led坐标
         for d in pixels.iter_mut() {
             d.0.x -= vp.x;
@@ -134,19 +124,12 @@ impl Maze {
     /// 检测是否撞墙
     fn hit_wall(&mut self, app: &mut App<'_>) -> bool {
         let Point { x, y } = self.player.next_pos(app.ad);
-        let overlapping = x <= 0
-            || y <= 0
-            || x >= self.map.map.width as i32 - 1
-            || y >= self.map.map.height as i32 - 1;
+        let overlapping = x <= 0 || y <= 0 || x >= self.map.map.width as i32 - 1 || y >= self.map.map.height as i32 - 1;
         if overlapping {
             return true;
         }
         // 检测玩家下一个位置是否有墙
-        self.map
-            .map
-            .data
-            .iter()
-            .any(|c| c.0.0.x == x && c.0.0.y == y)
+        self.map.map.data.iter().any(|c| c.0.0.x == x && c.0.0.y == y)
     }
 }
 
@@ -190,8 +173,7 @@ impl MazeMap {
 
     /// 使用BFS计算结束位置，选择距离起点最远的可达点
     fn cal_epos(&mut self) {
-        use alloc::collections::VecDeque;
-        use alloc::vec::Vec;
+        use alloc::{collections::VecDeque, vec::Vec};
 
         let w = self.map.width;
         let h = self.map.height;

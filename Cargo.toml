@@ -12,7 +12,6 @@ authors = ["LittleGuest <2190975784@qq.com>"]
 
 [workspace.dependencies]
 esp-hal = { version = "~1.1.0", features = ["defmt", "esp32c3", "unstable"] }
-
 esp-rtos = { version = "0.3.0", features = [
   "defmt",
   "embassy",
@@ -20,10 +19,8 @@ esp-rtos = { version = "0.3.0", features = [
   "esp-radio",
   "esp32c3",
 ] }
-
 defmt = "1.0.1"
 esp-bootloader-esp-idf = { version = "0.5.0", features = ["defmt", "esp32c3"] }
-
 embassy-net = { version = "0.9.1", features = [
   "defmt",
   "dhcpv4",
@@ -40,7 +37,6 @@ esp-backtrace = { version = "0.19.0", features = [
   "panic-handler",
 ] }
 esp-println = { version = "0.17.0", features = ["defmt-espflash", "esp32c3"] }
-# for more networking protocol support see https://crates.io/crates/edge-net
 bleps = { git = "https://github.com/bjoernQ/bleps", package = "bleps", rev = "a5148d8ae679e021b78f53fd33afb8bb35d0b62e", features = [
   "async",
   "macros",
@@ -70,7 +66,6 @@ smoltcp = { version = "0.13.0", default-features = false, features = [
   "socket-tcp",
   "socket-udp",
 ] }
-
 critical-section = "1.2.0"
 static_cell = "2.1.1"
 heapless = { version = "0.9.3", default-features = false }
@@ -94,3 +89,8 @@ maze = { path = "../maze" }
 embassy-futures = "0.1.1"
 rand_core = "0.9.3"
 rand = { version = "0.9.2", default-features = false }
+nb = "1.1"
+num-traits = { version = "0.2", default-features = false }
+smart-leds-trait = "0.3.2"
+thiserror = { version = "2.0.20", default-features = false }
+esp-hal-smartled2 = { version = "0.29.0", features = ["defmt", "esp32c3"] }

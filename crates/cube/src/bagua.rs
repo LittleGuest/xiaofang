@@ -1,7 +1,8 @@
 #![doc = include_str!("../../../rfcs/001_bagua.md")]
 
-use crate::{App, CubeRng, buzzer};
 use embassy_time::Timer;
+
+use crate::{App, CubeRng, buzzer};
 
 /// 八卦
 #[derive(Debug)]

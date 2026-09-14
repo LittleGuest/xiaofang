@@ -1,11 +1,12 @@
 #![doc = include_str!("../../../rfcs/008_dodge_cube.md")]
 
-use crate::{Ad, App, CubeRng, Point, buzzer};
-use alloc::collections::VecDeque;
-use alloc::vec::Vec;
+use alloc::{collections::VecDeque, vec::Vec};
+
 use embassy_time::Timer;
 use embedded_graphics_core::{Pixel, pixelcolor::Rgb888, prelude::WebColors};
 use esp_hal::rng::Rng;
+
+use crate::{Ad, App, CubeRng, Point, buzzer};
 
 /// 躲避方块
 #[derive(Debug)]

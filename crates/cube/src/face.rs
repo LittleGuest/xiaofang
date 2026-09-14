@@ -1,6 +1,8 @@
-use crate::{buzzer, ledc::LedControl};
 use alloc::vec::Vec;
+
 use embassy_time::Timer;
+
+use crate::{buzzer, ledc::LedControl};
 
 /// 表情
 /// 左上角为坐标原点

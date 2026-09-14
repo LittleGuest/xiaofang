@@ -1,8 +1,7 @@
 #![doc = include_str!("../../../rfcs/010_play_ball.md")]
 
-use crate::{Ad, App, buzzer};
 use defmt::info;
-use embassy_futures::select::{select, Either};
+use embassy_futures::select::{Either, select};
 use embassy_time::{Duration, Instant, Timer};
 use embedded_graphics::{
     Pixel,
@@ -10,6 +9,8 @@ use embedded_graphics::{
     pixelcolor::{Rgb888, WebColors},
 };
 use esp_radio::esp_now::{BROADCAST_ADDRESS, EspNowWifiInterface, PeerInfo};
+
+use crate::{Ad, App, buzzer};
 
 /// 游戏码: 对打球
 const GAME_CODE: u8 = 0x01;
@@ -107,22 +108,12 @@ impl PlayBall {
         if self.role == Role::Host {
             info!(
                 "对打球 Host, peer: {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-                self.peer[0],
-                self.peer[1],
-                self.peer[2],
-                self.peer[3],
-                self.peer[4],
-                self.peer[5]
+                self.peer[0], self.peer[1], self.peer[2], self.peer[3], self.peer[4], self.peer[5]
             );
         } else {
             info!(
                 "对打球 Client, peer: {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-                self.peer[0],
-                self.peer[1],
-                self.peer[2],
-                self.peer[3],
-                self.peer[4],
-                self.peer[5]
+                self.peer[0], self.peer[1], self.peer[2], self.peer[3], self.peer[4], self.peer[5]
             );
         }
 
@@ -174,11 +165,7 @@ impl PlayBall {
         // 监听窗口(1s): 已有 Host 广播则直接成为 Client
         let listen_until = Instant::now() + Duration::from_millis(1000);
         while Instant::now() < listen_until {
-            let rx = select(
-                app.esp_now.as_mut().unwrap().receive_async(),
-                Timer::after_millis(100),
-            )
-            .await;
+            let rx = select(app.esp_now.as_mut().unwrap().receive_async(), Timer::after_millis(100)).await;
             if let Either::First(rx) = rx {
                 if rx.data() == [GAME_CODE, ST_SEEKING] && rx.info.src_address != app.my_mac {
                     self.role = Role::Client;
@@ -285,12 +272,7 @@ impl PlayBall {
             self.speed_level as u8,
             (self.score.0 << 4) | self.score.1,
         ];
-        let _ = app
-            .esp_now
-            .as_mut()
-            .unwrap()
-            .send_async(&self.peer, &packed)
-            .await;
+        let _ = app.esp_now.as_mut().unwrap().send_async(&self.peer, &packed).await;
     }
 
     /// Client → Host: 自己的拍子 y
@@ -309,10 +291,7 @@ impl PlayBall {
             .esp_now
             .as_mut()
             .unwrap()
-            .send_async(
-                &self.peer,
-                &[GAME_CODE, ST_END, (self.score.0 << 4) | self.score.1],
-            )
+            .send_async(&self.peer, &[GAME_CODE, ST_END, (self.score.0 << 4) | self.score.1])
             .await;
     }
 

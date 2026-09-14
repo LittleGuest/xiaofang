@@ -7,24 +7,26 @@
 )]
 #![deny(clippy::large_stack_frames)]
 
-use esp_hal::analog::adc::{Adc, AdcCalLine, AdcConfig, Attenuation};
-use esp_hal::clock::CpuClock;
-use esp_hal::timer::timg::TimerGroup;
-use esp_radio::ble::controller::BleConnector;
-
+use cube::{buzzer::Buzzer, ledc::LedControl};
 use defmt::{error, info};
-use esp_println as _;
-
-use cube::buzzer::Buzzer;
-use cube::ledc::LedControl;
 use embassy_executor::Spawner;
-use esp_hal::i2c::master::I2c;
-use esp_hal::ledc::{LSGlobalClkSource, Ledc};
-use esp_hal::spi::master::Spi;
-use esp_hal::{i2c, spi};
+use esp_hal::{
+    Blocking,
+    analog::adc::{Adc, AdcCalLine, AdcConfig, Attenuation},
+    clock::CpuClock,
+    i2c,
+    i2c::master::I2c,
+    ledc::{LSGlobalClkSource, Ledc},
+    rmt::Rmt,
+    time::Rate,
+    timer::timg::TimerGroup,
+};
+use esp_hal_smartled::{RmtSmartLeds, WS2812_TIMING, buffer_size, color_order::Rgb};
+use esp_println as _;
+use esp_radio::ble::controller::BleConnector;
 use esp_storage::FlashStorage;
-use mpu6050_dmp::address::Address;
-use mpu6050_dmp::sensor::Mpu6050;
+use mpu6050_dmp::{address::Address, sensor::Mpu6050};
+use smart_leds::RGB8;
 
 #[panic_handler]
 fn panic(panic_info: &core::panic::PanicInfo) -> ! {
@@ -53,15 +55,13 @@ async fn main(spawner: Spawner) {
 
     let rng = esp_hal::rng::Rng::new();
     let timg0 = TimerGroup::new(peripherals.TIMG0);
-    let sw_interrupt =
-        esp_hal::interrupt::software::SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
+    let sw_interrupt = esp_hal::interrupt::software::SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
 
     info!("Embassy initialized!");
 
     let (mut _wifi_controller, interfaces) =
-        esp_radio::wifi::new(peripherals.WIFI, Default::default())
-            .expect("Failed to initialize Wi-Fi controller");
+        esp_radio::wifi::new(peripherals.WIFI, Default::default()).expect("Failed to initialize Wi-Fi controller");
 
     // 取出 ESP-NOW 接口与本机 MAC，其余接口丢弃
     let esp_now = interfaces.esp_now;
@@ -89,28 +89,25 @@ async fn main(spawner: Spawner) {
     let mut mpu = Mpu6050::new(i2c, Address::default()).unwrap();
     mpu.initialize_dmp(&mut embassy_time::Delay).unwrap();
 
-    let spi = Spi::new(peripherals.SPI2, spi::master::Config::default())
-        .unwrap()
-        .with_mosi(peripherals.GPIO3);
-    let ledc = LedControl::new(spi);
+    let rmt = Rmt::new(peripherals.RMT, Rate::from_mhz(80)).unwrap();
+    let led = RmtSmartLeds::<{ buffer_size::<RGB8>(64) }, Blocking, RGB8, Rgb>::new(
+        WS2812_TIMING,
+        rmt.channel0,
+        peripherals.GPIO2,
+    )
+    .unwrap();
+    let ledc = LedControl::new(led);
     let flash = FlashStorage::new(peripherals.FLASH);
 
     // 麦克风 ADC 采样(GPIO0 = ADC1_CH0)
     let mut adc_config = AdcConfig::new();
-    let mic_pin = adc_config
-        .enable_pin_with_cal::<_, AdcCalLine<esp_hal::peripherals::ADC1<'static>>>(
-            peripherals.GPIO0,
-            Attenuation::_11dB,
-        );
+    let mic_pin = adc_config.enable_pin_with_cal::<_, AdcCalLine<esp_hal::peripherals::ADC1<'static>>>(
+        peripherals.GPIO0,
+        Attenuation::_11dB,
+    );
     let adc = Adc::new(peripherals.ADC1, adc_config);
 
-    cube::App::new(
-        mpu, ledc, spawner, flash, rng, adc, mic_pin, esp_now, my_mac,
-    )
-    .run()
-    .await;
-}
-
-fn map_range(x: f32, in_min: f32, in_max: f32, out_min: f32, out_max: f32) -> f32 {
-    (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
+    cube::App::new(mpu, ledc, spawner, flash, rng, adc, mic_pin, esp_now, my_mac)
+        .run()
+        .await;
 }

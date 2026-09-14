@@ -1,11 +1,13 @@
 #![doc = include_str!("../../../rfcs/009_music_spectrum.md")]
 
-use crate::App;
 use alloc::vec::Vec;
+
 use embassy_time::Timer;
 use embedded_graphics_core::{Pixel, pixelcolor::Rgb888};
 use microfft::real::rfft_64;
 use micromath::F32Ext;
+
+use crate::App;
 
 /// 音乐频谱
 pub struct MusicSpectrum;

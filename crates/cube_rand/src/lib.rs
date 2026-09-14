@@ -30,13 +30,7 @@ impl CubeRng {
     }
 
     pub fn random_range(&mut self, range: impl RangeBounds<usize>) -> usize {
-        let panic_empty_range = || {
-            panic!(
-                "empty range: {:?}..{:?}",
-                range.start_bound(),
-                range.end_bound()
-            )
-        };
+        let panic_empty_range = || panic!("empty range: {:?}..{:?}", range.start_bound(), range.end_bound());
 
         let low = match range.start_bound() {
             Bound::Unbounded => u32::MIN,

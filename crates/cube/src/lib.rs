@@ -1,8 +1,8 @@
 #![no_std]
 #![no_main]
 
-use crate::{dodge_cube::DodgeCubeGame, sokoban::Sokoban};
 use alloc::vec::Vec;
+
 use bagua::BaGua;
 use cube_man::CubeManGame;
 use cube_rand::CubeRng;
@@ -11,7 +11,12 @@ use embassy_executor::Spawner;
 use embassy_time::Timer;
 use embedded_graphics_core::pixelcolor::Rgb888;
 use embedded_storage::{ReadStorage, Storage};
-use esp_hal::{Blocking, analog::adc::{Adc, AdcCalLine, AdcPin}, i2c::master::I2c, rng::Rng};
+use esp_hal::{
+    Blocking,
+    analog::adc::{Adc, AdcCalLine, AdcPin},
+    i2c::master::I2c,
+    rng::Rng,
+};
 use esp_radio::esp_now::EspNow;
 use esp_storage::FlashStorage;
 use face::Face;
@@ -24,6 +29,8 @@ use mpu6050_dmp::{
 use snake::SnakeGame;
 use timers::Timers;
 use ui::Ui;
+
+use crate::{dodge_cube::DodgeCubeGame, sokoban::Sokoban};
 
 extern crate alloc;
 
@@ -283,8 +290,7 @@ impl<'d> App<'d> {
             self.acc_direction();
 
             if self.ad == Ad::default() {
-                self.ledc
-                    .write_bytes(self.uis[self.ui_current_idx as usize].ui());
+                self.ledc.write_bytes(self.uis[self.ui_current_idx as usize].ui());
                 continue;
             }
 
@@ -341,8 +347,7 @@ impl<'d> App<'d> {
                     if self.ui_current_idx >= self.uis.len() as i8 {
                         self.ui_current_idx = 0;
                     }
-                    self.ledc
-                        .write_bytes(self.uis[self.ui_current_idx as usize].ui());
+                    self.ledc.write_bytes(self.uis[self.ui_current_idx as usize].ui());
                     buzzer::menu_select().await;
                 }
                 Ad::Left => {
@@ -350,13 +355,11 @@ impl<'d> App<'d> {
                     if self.ui_current_idx < 0 {
                         self.ui_current_idx = self.uis.len() as i8 - 1;
                     }
-                    self.ledc
-                        .write_bytes(self.uis[self.ui_current_idx as usize].ui());
+                    self.ledc.write_bytes(self.uis[self.ui_current_idx as usize].ui());
                     buzzer::menu_select().await;
                 }
                 _ => {
-                    self.ledc
-                        .write_bytes(self.uis[self.ui_current_idx as usize].ui());
+                    self.ledc.write_bytes(self.uis[self.ui_current_idx as usize].ui());
                 }
             }
         }

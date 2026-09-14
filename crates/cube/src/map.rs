@@ -1,8 +1,9 @@
+use alloc::vec::Vec;
 use core::fmt::Display;
 
-use crate::{Ad, Point};
-use alloc::vec::Vec;
 use embedded_graphics::{Pixel, pixelcolor::Rgb888};
+
+use crate::{Ad, Point};
 
 pub type MapCell<T = ()> = (Pixel<Rgb888>, T);
 
@@ -39,11 +40,7 @@ pub struct Vision<const W: usize, const H: usize, T> {
 impl<const W: usize, const H: usize, T> Display for Vision<W, H, T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         writeln!(f, "{:?}", self.pos)?;
-        let mut data = self
-            .data
-            .iter()
-            .map(|c| (c.0.0.x, c.0.0.y))
-            .collect::<Vec<_>>();
+        let mut data = self.data.iter().map(|c| (c.0.0.x, c.0.0.y)).collect::<Vec<_>>();
         data.sort_by_key(|c| c.0);
         writeln!(f, "{data:?}")
     }
@@ -114,9 +111,7 @@ impl<const W: usize, const H: usize, T: Clone> Vision<W, H, T> {
                 .collect::<Vec<_>>();
         } else {
             self.data = data
-                .filter(|d| {
-                    d.0.0.x >= x && d.0.0.x < x + W as i32 && d.0.0.y >= y && d.0.0.y < y + H as i32
-                })
+                .filter(|d| d.0.0.x >= x && d.0.0.x < x + W as i32 && d.0.0.y >= y && d.0.0.y < y + H as i32)
                 .cloned()
                 .collect::<Vec<_>>();
         }

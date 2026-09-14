@@ -1,16 +1,18 @@
 #![doc = include_str!("../../../rfcs/007_sokoban.md")]
 
-use crate::{
-    Ad, App, Point, buzzer,
-    map::{Map, MapCell, Vision},
-    player::Player,
-};
 use alloc::vec::Vec;
+
 use embassy_time::Timer;
 use embedded_graphics_core::{
     Pixel,
     pixelcolor::{BinaryColor, Rgb888},
     prelude::WebColors,
+};
+
+use crate::{
+    Ad, App, Point, buzzer,
+    map::{Map, MapCell, Vision},
+    player::Player,
 };
 
 /// 预设的XSB关卡列表
@@ -202,12 +204,15 @@ impl Sokoban {
                     Ad::Left => boxp.x -= 1,
                     _ => {}
                 };
-                let is_box = boxs.iter().any(|m| {
-                    matches!(m.1, TargetType::Box) && m.0.0.x == boxp.x && m.0.0.y == boxp.y
-                });
-                let is_wall = self.map.map.data.iter().any(|m| {
-                    matches!(m.1, TargetType::Wall) && m.0.0.x == boxp.x && m.0.0.y == boxp.y
-                });
+                let is_box = boxs
+                    .iter()
+                    .any(|m| matches!(m.1, TargetType::Box) && m.0.0.x == boxp.x && m.0.0.y == boxp.y);
+                let is_wall = self
+                    .map
+                    .map
+                    .data
+                    .iter()
+                    .any(|m| matches!(m.1, TargetType::Wall) && m.0.0.x == boxp.x && m.0.0.y == boxp.y);
                 if is_box || is_wall {
                     return false;
                 }
@@ -235,14 +240,7 @@ impl Sokoban {
     fn draw(&mut self, app: &mut App<'_>) {
         app.ledc.clear_with_color(BinaryColor::Off.into());
         let vp = self.vision.pos;
-        let mut pixels = self
-            .map
-            .map
-            .data
-            .iter()
-            .map(|m| m.0)
-            .clone()
-            .collect::<Vec<_>>();
+        let mut pixels = self.map.map.data.iter().map(|m| m.0).clone().collect::<Vec<_>>();
         // 将全局坐标转换为led坐标
         for d in pixels.iter_mut() {
             d.0.x -= vp.x;
@@ -252,11 +250,7 @@ impl Sokoban {
         let goals = self.map.goals.iter().map(|m| m.0.0).collect::<Vec<_>>();
         for b in self.map.boxs.iter().map(|b| b.0) {
             // 青色表示箱子在目标点上
-            let color = if goals.contains(&b.0) {
-                Rgb888::CSS_CYAN
-            } else {
-                b.1
-            };
+            let color = if goals.contains(&b.0) { Rgb888::CSS_CYAN } else { b.1 };
             let pp = Pixel(((b.0.x - vp.x), (b.0.y - vp.y)).into(), color);
             pixels.push(pp);
         }
@@ -278,10 +272,7 @@ impl Sokoban {
     /// 检测是否撞墙
     fn hit_wall(&mut self, app: &mut App<'_>) -> bool {
         let Point { x, y } = self.player.next_pos(app.ad);
-        let overlapping = x <= 0
-            || y <= 0
-            || x >= self.map.map.width as i32 - 1
-            || y >= self.map.map.height as i32 - 1;
+        let overlapping = x <= 0 || y <= 0 || x >= self.map.map.width as i32 - 1 || y >= self.map.map.height as i32 - 1;
         if overlapping {
             return true;
         }
@@ -355,12 +346,10 @@ impl SokobanMap {
                         map.map.data.push(goal);
                     }
                     '$' => {
-                        map.boxs
-                            .push((Pixel((x, y).into(), Rgb888::CSS_BLUE), TargetType::Box));
+                        map.boxs.push((Pixel((x, y).into(), Rgb888::CSS_BLUE), TargetType::Box));
                     }
                     '*' => {
-                        map.boxs
-                            .push((Pixel((x, y).into(), Rgb888::CSS_BLUE), TargetType::Box));
+                        map.boxs.push((Pixel((x, y).into(), Rgb888::CSS_BLUE), TargetType::Box));
                         let goal = (Pixel((x, y).into(), Rgb888::CSS_GREEN), TargetType::Goal);
                         map.goals.push(goal);
                         map.map.data.push(goal);
@@ -531,7 +520,8 @@ impl SokobanMap {
                         map.goals.push(goal);
                         map.map.data.push(goal);
                     } else if cell & LURD_BOX != 0 {
-                        map.boxs.push((Pixel((px, py).into(), Rgb888::CSS_BLUE), TargetType::Box));
+                        map.boxs
+                            .push((Pixel((px, py).into(), Rgb888::CSS_BLUE), TargetType::Box));
                         let goal = (Pixel((px, py).into(), Rgb888::CSS_GREEN), TargetType::Goal);
                         map.goals.push(goal);
                         map.map.data.push(goal);
@@ -545,7 +535,8 @@ impl SokobanMap {
                     if man_x == xx as i32 && man_y == yy as i32 {
                         map.player = (Pixel((px, py).into(), Rgb888::CSS_RED), TargetType::Man);
                     } else if cell & LURD_BOX != 0 {
-                        map.boxs.push((Pixel((px, py).into(), Rgb888::CSS_BLUE), TargetType::Box));
+                        map.boxs
+                            .push((Pixel((px, py).into(), Rgb888::CSS_BLUE), TargetType::Box));
                     }
                 } else {
                     // 墙

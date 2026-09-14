@@ -6,9 +6,12 @@
 //! 生成的结果:0表示路,1表示墙
 
 use alloc::vec::Vec;
-use core::convert::TryInto;
-use core::ops::{Add, Index, IndexMut, Mul};
-use core::slice::{Iter, IterMut};
+use core::{
+    convert::TryInto,
+    ops::{Add, Index, IndexMut, Mul},
+    slice::{Iter, IterMut},
+};
+
 use rand::{Rng, prelude::SliceRandom};
 
 #[macro_use]
@@ -32,12 +35,7 @@ enum Direction {
     West,
 }
 
-const ALL_DIRS: [Direction; 4] = [
-    Direction::North,
-    Direction::East,
-    Direction::South,
-    Direction::West,
-];
+const ALL_DIRS: [Direction; 4] = [Direction::North, Direction::East, Direction::South, Direction::West];
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 struct TinyVec {

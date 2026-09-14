@@ -1,8 +1,9 @@
 #![doc = include_str!("../../../rfcs/002_dice.md")]
 
-use crate::{App, CubeRng, buzzer};
 use embassy_time::Timer;
 use esp_hal::rng::Rng;
+
+use crate::{App, CubeRng, buzzer};
 
 /// 骰子
 #[derive(Debug)]

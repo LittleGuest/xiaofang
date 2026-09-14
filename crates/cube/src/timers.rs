@@ -1,13 +1,15 @@
 #![doc = include_str!("../../../rfcs/004_timer.md")]
 
-use crate::{App, CubeRng, buzzer};
 use alloc::vec::Vec;
+
 use embassy_time::Timer;
 use embedded_graphics::geometry::Point;
 use embedded_graphics_core::{
     Pixel,
     pixelcolor::{BinaryColor, Rgb888},
 };
+
+use crate::{App, CubeRng, buzzer};
 
 /// 沙漏
 #[derive(Debug, Clone)]

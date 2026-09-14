@@ -1,7 +1,7 @@
 #![doc = include_str!("../../../rfcs/006_cube_man.md")]
 
-use crate::{Ad, App, buzzer};
 use alloc::{collections::VecDeque, vec::Vec};
+
 use cube_rand::CubeRng;
 use embassy_time::Timer;
 use embedded_graphics::{geometry::Point, pixelcolor::RgbColor};
@@ -11,6 +11,8 @@ use embedded_graphics_core::{
     prelude::WebColors,
 };
 use esp_hal::rng::Rng;
+
+use crate::{Ad, App, buzzer};
 
 /// 是方块人就下一百层
 #[derive(Debug)]
@@ -74,8 +76,7 @@ impl CubeManGame {
             app.check_pause().await;
             {
                 self.floors.pop_front();
-                self.floors
-                    .push_back(self.floor_gen.floor(self.depth, &mut app.rng));
+                self.floors.push_back(self.floor_gen.floor(self.depth, &mut app.rng));
                 self.floors.iter_mut().for_each(|f| {
                     if let Some(f) = f {
                         f.data.iter_mut().for_each(|f| f.0.y -= 1);
@@ -105,11 +106,7 @@ impl CubeManGame {
             }
             // 如果下面是楼梯,在停在楼梯上
             if let Some(floor) = Self::on_floor(
-                &self
-                    .floors
-                    .iter()
-                    .filter_map(|f| f.clone())
-                    .collect::<Vec<_>>(),
+                &self.floors.iter().filter_map(|f| f.clone()).collect::<Vec<_>>(),
                 &self.man.pos,
             ) {
                 // 随楼梯一起向上运动
@@ -189,11 +186,7 @@ impl CubeManGame {
                                         .iter()
                                         .enumerate()
                                         .map(|(j, p)| {
-                                            let c = if j <= i {
-                                                Rgb888::CSS_WHITE
-                                            } else {
-                                                RgbColor::GREEN
-                                            };
+                                            let c = if j <= i { Rgb888::CSS_WHITE } else { RgbColor::GREEN };
                                             Pixel(*p, c)
                                         })
                                         .collect::<Vec<_>>();
@@ -208,11 +201,7 @@ impl CubeManGame {
                                         .iter()
                                         .enumerate()
                                         .map(|(j, p)| {
-                                            let c = if j >= i {
-                                                Rgb888::CSS_WHITE
-                                            } else {
-                                                RgbColor::GREEN
-                                            };
+                                            let c = if j >= i { Rgb888::CSS_WHITE } else { RgbColor::GREEN };
                                             Pixel(*p, c)
                                         })
                                         .collect::<Vec<_>>();

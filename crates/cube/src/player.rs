@@ -1,8 +1,9 @@
-use crate::{Ad, Color, Point};
 use embedded_graphics::{
     Pixel,
     pixelcolor::{Rgb888, WebColors},
 };
+
+use crate::{Ad, Color, Point};
 
 /// 玩家
 #[derive(Debug, Clone, Copy)]

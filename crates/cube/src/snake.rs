@@ -1,7 +1,7 @@
 #![doc = include_str!("../../../rfcs/003_snake.md")]
 
-use crate::{Ad, App, Direction, buzzer};
 use alloc::collections::LinkedList;
+
 use cube_rand::CubeRng;
 use embassy_time::Timer;
 use embedded_graphics::{
@@ -10,6 +10,8 @@ use embedded_graphics::{
     pixelcolor::{Rgb888, WebColors},
 };
 use esp_hal::rng::Rng;
+
+use crate::{Ad, App, Direction, buzzer};
 
 #[derive(Debug)]
 pub struct SnakeGame {
@@ -88,8 +90,7 @@ impl SnakeGame {
             self.eat_flash = true;
 
             self.snake.grow(self.food.clone());
-            self.food
-                .create_food(self.width, self.height, &self.snake.body, rng);
+            self.food.create_food(self.width, self.height, &self.snake.body, rng);
             self.calc_score();
             buzzer::snake_move().await;
         } else if self.outside(next_head) || self.snake.overlapping() {
@@ -105,10 +106,7 @@ impl SnakeGame {
     }
 
     fn outside(&self, next_head: Point) -> bool {
-        next_head.x < 0
-            || next_head.y < 0
-            || next_head.x >= self.width
-            || next_head.y >= self.height
+        next_head.x < 0 || next_head.y < 0 || next_head.x >= self.width || next_head.y >= self.height
     }
 
     pub fn draw(&mut self, app: &mut App<'_>) {
@@ -156,13 +154,7 @@ impl Food {
         }
     }
 
-    fn create_food(
-        &self,
-        width: i32,
-        height: i32,
-        snake_body: &LinkedList<Pixel<Rgb888>>,
-        rng: &mut Rng,
-    ) -> Self {
+    fn create_food(&self, width: i32, height: i32, snake_body: &LinkedList<Pixel<Rgb888>>, rng: &mut Rng) -> Self {
         loop {
             let food = Food::random(width, height, rng);
             if snake_body.iter().any(|s| s.0.eq(&food.pos)) {
