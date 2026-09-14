@@ -93,7 +93,7 @@ async fn main(spawner: Spawner) {
     let led = RmtSmartLeds::<{ buffer_size::<RGB8>(64) }, Blocking, RGB8, Rgb>::new(
         WS2812_TIMING,
         rmt.channel0,
-        peripherals.GPIO2,
+        peripherals.GPIO3,
     )
     .unwrap();
     let ledc = LedControl::new(led);
