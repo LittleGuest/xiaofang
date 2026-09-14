@@ -30,24 +30,26 @@ impl<'d> Buzzer<'d> {
     async fn drive(&mut self, frequency: u32, duty_pct: u8) {
         // 定时器配置:指定 PWM 信号的频率和占空比分辨率
         let mut lstimer0 = self.ledc.timer::<LowSpeed>(timer::Number::Timer0);
-        lstimer0
+        // 配置失败(如频率超范围): 发声是尽力而为, 放弃本次失败不影响游戏
+        if lstimer0
             .configure(timer::config::Config {
                 duty: timer::config::Duty::Duty13Bit,
                 clock_source: timer::LSClockSource::APBClk,
                 frequency: Rate::from_hz(frequency),
             })
-            .unwrap();
+            .is_err()
+        {
+            return;
+        }
         // 通道配置:绑定定时器和输出 PWM 信号的 GPIO
         let config = OutputConfig::default();
         let led = Output::new(self.pin.reborrow(), Level::High, config);
         let mut channel0 = self.ledc.channel(channel::Number::Channel0, led);
-        channel0
-            .configure(channel::config::Config {
-                timer: &lstimer0,
-                duty_pct,
-                drive_mode: DriveMode::PushPull,
-            })
-            .unwrap();
+        let _ = channel0.configure(channel::config::Config {
+            timer: &lstimer0,
+            duty_pct,
+            drive_mode: DriveMode::PushPull,
+        });
     }
 
     /// 发声
@@ -239,6 +241,17 @@ pub async fn cube_man_score() {
 /// 方块人死亡音效
 pub async fn cube_man_die() {
     play(SoundCmd::Ranges(&[(500, 1000), (300, 1000), (100, 1000)]));
+}
+
+/// 方块人破纪录音效(上行号角)
+pub async fn cube_man_record() {
+    play(SoundCmd::Ranges(&[
+        (2000, 100),
+        (2500, 100),
+        (3000, 100),
+        (3500, 100),
+        (4000, 300),
+    ]));
 }
 
 /// 对打球配对成功音效

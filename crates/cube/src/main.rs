@@ -81,21 +81,33 @@ async fn main(spawner: Spawner) {
     let buzzer = cube::buzzer::BUZZER_CELL.init(Buzzer::new(peripherals.GPIO11, ledc));
     cube::buzzer::start_player(spawner, buzzer);
 
-    let i2c = I2c::new(peripherals.I2C0, i2c::master::Config::default())
-        .unwrap()
-        .with_sda(peripherals.GPIO4)
-        .with_scl(peripherals.GPIO5);
+    let Ok(i2c) = I2c::new(peripherals.I2C0, i2c::master::Config::default()) else {
+        error!("初始化 I2C 失败");
+        return;
+    };
+    let i2c = i2c.with_sda(peripherals.GPIO4).with_scl(peripherals.GPIO5);
 
-    let mut mpu = Mpu6050::new(i2c, Address::default()).unwrap();
-    mpu.initialize_dmp(&mut embassy_time::Delay).unwrap();
+    let Ok(mut mpu) = Mpu6050::new(i2c, Address::default()) else {
+        error!("初始化Mpu6050失败");
+        return;
+    };
+    if mpu.initialize_dmp(&mut embassy_time::Delay).is_err() {
+        error!("初始化 DMP 失败");
+        return;
+    }
 
-    let rmt = Rmt::new(peripherals.RMT, Rate::from_mhz(80)).unwrap();
-    let led = RmtSmartLeds::<{ buffer_size::<RGB8>(64) }, Blocking, RGB8, Rgb>::new(
+    let Ok(rmt) = Rmt::new(peripherals.RMT, Rate::from_mhz(80)) else {
+        error!("初始化 RMT 失败");
+        return;
+    };
+    let Ok(led) = RmtSmartLeds::<{ buffer_size::<RGB8>(64) }, Blocking, RGB8, Rgb>::new(
         WS2812_TIMING,
         rmt.channel0,
         peripherals.GPIO3,
-    )
-    .unwrap();
+    ) else {
+        error!("初始化 LED 灯带失败");
+        return;
+    };
     let ledc = LedControl::new(led);
     let flash = FlashStorage::new(peripherals.FLASH);
 

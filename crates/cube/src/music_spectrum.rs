@@ -69,7 +69,7 @@ impl MusicSpectrum {
             let avg: f32 = spectrum[start..end].iter().sum::<f32>() / band_size as f32;
 
             // 映射到 0-8 高度（增益系数需实际调参）
-            let height = ((avg * 8.0).min(8.0)).max(0.0) as i32;
+            let height = (avg * 8.0).clamp(0.0, 8.0) as i32;
 
             // 颜色渐变：低频绿色 -> 高频红色
             let r = ((band * 255) / num_bands) as u8;

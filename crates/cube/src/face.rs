@@ -1,5 +1,3 @@
-use alloc::vec::Vec;
-
 use embassy_time::Timer;
 
 use crate::{buzzer, ledc::LedControl};
@@ -9,7 +7,6 @@ use crate::{buzzer, ledc::LedControl};
 #[derive(Debug, Default)]
 pub struct Face {
     pub data: [u8; 8],
-    frames: Vec<[u8; 8]>,
 }
 
 impl Face {

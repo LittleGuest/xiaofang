@@ -149,6 +149,8 @@ pub struct App<'d> {
     /// 表情
     face: Face,
     ad: Ad,
+    /// 上一次成功读取的加速度, I2C 瞬时失败时回退使用, 避免热循环 panic
+    last_accel: Option<AccelF32>,
 
     mpu6050: Mpu6050<I2c<'d, Blocking>>,
     ledc: LedControl<'d>,
@@ -168,12 +170,21 @@ pub struct App<'d> {
     /// 本机 MAC 地址
     my_mac: [u8; 6],
 
+    #[allow(unused)]
     spawner: Spawner,
 }
 
 impl<'d> App<'d> {
     pub fn accel(&mut self) -> AccelF32 {
-        self.mpu6050.accel().unwrap().scaled(AccelFullScale::G2)
+        match self.mpu6050.accel() {
+            Ok(a) => {
+                let a = a.scaled(AccelFullScale::G2);
+                self.last_accel = Some(a);
+                a
+            }
+            // I2C 总线瞬时出错: 沿用上一次成功值, 不 panic
+            Err(_) => self.last_accel.unwrap_or(AccelF32::new(0.0, 0.0, 0.0)),
+        }
     }
 
     /// 加速度方向（基于倾斜姿态）
@@ -237,6 +248,7 @@ impl<'d> App<'d> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         mpu6050: Mpu6050<I2c<'d, Blocking>>,
         mut ledc: LedControl<'d>,
@@ -259,6 +271,7 @@ impl<'d> App<'d> {
             ui_current_idx: 0,
             face: Face::default(),
             ad: Ad::default(),
+            last_accel: None,
 
             mpu6050,
             ledc,
@@ -316,7 +329,7 @@ impl<'d> App<'d> {
                         Ui::BaGua => BaGua::run(&mut self).await,
                         Ui::Maze => {
                             let mut cr = CubeRng(self.rng.random() as u64).random_range(19..=33);
-                            if cr % 2 == 0 {
+                            if cr.is_multiple_of(2) {
                                 cr += 1;
                             }
                             Maze::new(cr, cr, &mut self.rng).run(&mut self).await;

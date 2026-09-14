@@ -73,6 +73,12 @@ pub struct PlayBall {
     flash_green: bool,
 }
 
+impl Default for PlayBall {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PlayBall {
     pub fn new() -> Self {
         Self {
@@ -165,16 +171,21 @@ impl PlayBall {
         // 监听窗口(1s): 已有 Host 广播则直接成为 Client
         let listen_until = Instant::now() + Duration::from_millis(1000);
         while Instant::now() < listen_until {
-            let rx = select(app.esp_now.as_mut().unwrap().receive_async(), Timer::after_millis(100)).await;
-            if let Either::First(rx) = rx {
-                if rx.data() == [GAME_CODE, ST_SEEKING] && rx.info.src_address != app.my_mac {
-                    self.role = Role::Client;
-                    self.peer = rx.info.src_address;
-                    self.add_peer(app);
-                    self.send_join(app).await;
-                    self.last_rx = Instant::now();
-                    return Ok(());
-                }
+            let rx = select(
+                app.esp_now.as_mut().expect("esp_now 未初始化").receive_async(),
+                Timer::after_millis(100),
+            )
+            .await;
+            if let Either::First(rx) = rx
+                && rx.data() == [GAME_CODE, ST_SEEKING]
+                && rx.info.src_address != app.my_mac
+            {
+                self.role = Role::Client;
+                self.peer = rx.info.src_address;
+                self.add_peer(app);
+                self.send_join(app).await;
+                self.last_rx = Instant::now();
+                return Ok(());
             }
             self.draw_seeking(app, anim);
             anim = anim.wrapping_add(1);
@@ -186,11 +197,11 @@ impl PlayBall {
             let _ = app
                 .esp_now
                 .as_mut()
-                .unwrap()
+                .expect("esp_now 未初始化")
                 .send_async(&BROADCAST_ADDRESS, &[GAME_CODE, ST_SEEKING])
                 .await;
 
-            while let Some(rx) = app.esp_now.as_mut().unwrap().receive() {
+            while let Some(rx) = app.esp_now.as_mut().expect("esp_now 未初始化").receive() {
                 let src = rx.info.src_address;
                 if src == app.my_mac {
                     continue;
@@ -227,7 +238,7 @@ impl PlayBall {
 
     /// 把对方加入 peer 列表(发送前必须先 add_peer)
     fn add_peer(&mut self, app: &mut App<'_>) {
-        let _ = app.esp_now.as_mut().unwrap().add_peer(PeerInfo {
+        let _ = app.esp_now.as_mut().expect("esp_now 未初始化").add_peer(PeerInfo {
             interface: EspNowWifiInterface::Station,
             peer_address: self.peer,
             lmk: None,
@@ -241,7 +252,7 @@ impl PlayBall {
         let _ = app
             .esp_now
             .as_mut()
-            .unwrap()
+            .expect("esp_now 未初始化")
             .send_async(&self.peer, &[GAME_CODE, ST_JOIN])
             .await;
     }
@@ -249,13 +260,13 @@ impl PlayBall {
     /// Host → Client: START + 发球方
     async fn send_start(&mut self, app: &mut App<'_>) {
         // 随机决定首局发球方
-        self.server_is_host = app.rng.random() % 2 == 0;
+        self.server_is_host = app.rng.random().is_multiple_of(2);
         let serve = if self.server_is_host { 0u8 } else { 1u8 };
         self.serve();
         let _ = app
             .esp_now
             .as_mut()
-            .unwrap()
+            .expect("esp_now 未初始化")
             .send_async(&self.peer, &[GAME_CODE, ST_GAME, serve])
             .await;
     }
@@ -272,7 +283,12 @@ impl PlayBall {
             self.speed_level as u8,
             (self.score.0 << 4) | self.score.1,
         ];
-        let _ = app.esp_now.as_mut().unwrap().send_async(&self.peer, &packed).await;
+        let _ = app
+            .esp_now
+            .as_mut()
+            .expect("esp_now 未初始化")
+            .send_async(&self.peer, &packed)
+            .await;
     }
 
     /// Client → Host: 自己的拍子 y
@@ -280,7 +296,7 @@ impl PlayBall {
         let _ = app
             .esp_now
             .as_mut()
-            .unwrap()
+            .expect("esp_now 未初始化")
             .send_async(&self.peer, &[GAME_CODE, ST_GAME, self.my_paddle, 0, 0])
             .await;
     }
@@ -290,17 +306,14 @@ impl PlayBall {
         let _ = app
             .esp_now
             .as_mut()
-            .unwrap()
+            .expect("esp_now 未初始化")
             .send_async(&self.peer, &[GAME_CODE, ST_END, (self.score.0 << 4) | self.score.1])
             .await;
     }
 
     /// 收包并更新状态。返回 false 表示掉线
     fn recv_packets(&mut self, app: &mut App<'_>) -> bool {
-        loop {
-            let Some(rx) = app.esp_now.as_mut().unwrap().receive() else {
-                break;
-            };
+        while let Some(rx) = app.esp_now.as_mut().expect("esp_now 未初始化").receive() {
             if rx.info.src_address != self.peer {
                 continue;
             }
@@ -435,8 +448,8 @@ impl PlayBall {
         }
 
         ledc.clear();
-        let bx = (self.ball.0 / FIXED) as i32;
-        let by = (self.ball.1 / FIXED) as i32;
+        let bx = self.ball.0 / FIXED;
+        let by = self.ball.1 / FIXED;
         let my = self.my_paddle as i32;
         let peer = self.peer_paddle as i32;
         ledc.write_pixels([

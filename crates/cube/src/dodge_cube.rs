@@ -40,9 +40,9 @@ impl CubeRow {
     fn random(gap_count: usize, rng: &mut Rng) -> Self {
         let mut data = [true; 8];
         let start = CubeRng(rng.random() as u64).random_range(0..=(8 - gap_count));
-        for i in start..start + gap_count {
+        for (i, item) in data.iter_mut().enumerate().skip(start).take(gap_count) {
             if i < 8 {
-                data[i] = false;
+                *item = false;
             }
         }
         Self { data }
@@ -122,7 +122,7 @@ impl DodgeCubeGame {
 
             // 5. 得分
             self.calc_score();
-            if self.score % 10 == 0 {
+            if self.score.is_multiple_of(10) {
                 buzzer::dodge_cube_score().await;
             }
 
@@ -152,10 +152,8 @@ impl DodgeCubeGame {
                     self.player_pos.x -= 1;
                 }
             }
-            Ad::Right => {
-                if self.player_pos.x < self.width - 1 {
-                    self.player_pos.x += 1;
-                }
+            Ad::Right if self.player_pos.x < self.width - 1 => {
+                self.player_pos.x += 1;
             }
             _ => {}
         }

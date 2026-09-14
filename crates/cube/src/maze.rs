@@ -6,7 +6,7 @@ use embassy_time::Timer;
 use embedded_graphics_core::{
     Pixel,
     pixelcolor::{BinaryColor, Rgb888},
-    prelude::{RgbColor, WebColors},
+    prelude::WebColors,
 };
 use esp_hal::rng::Rng;
 
@@ -137,8 +137,6 @@ impl Maze {
 #[derive(Debug)]
 struct MazeMap {
     map: Map<()>,
-    /// 地图颜色
-    color: Rgb888,
     /// 起点
     spos: Point,
     /// 终点
@@ -150,13 +148,14 @@ struct MazeMap {
 impl MazeMap {
     fn new(width: usize, height: usize, rng: &mut Rng) -> Self {
         // 使用地图生成算法生成地图 TODO: 迷宫大小,使用的算法都随机
+        // 迷宫需为奇数且>=5 的尺寸; 调用方 Maze::new 已保证(cr 为 19..=33 的奇数), 不可达时为程序错误
         let maze = maze::Maze::new(width, height)
-            .unwrap()
+            .expect("迷宫尺寸非法: 需为奇数且>=5")
             .generate(&mut CubeRng(rng.random() as u64));
         let mut map = Map::new(width, height);
         for y in 0..height {
-            for x in 0..width {
-                if maze[y][x] == 1 {
+            for (x, item) in maze[y].iter().enumerate().take(width) {
+                if *item == 1 {
                     map.data
                         .push((Pixel((x as i32, y as i32).into(), Rgb888::CSS_WHITE), ()));
                 }
@@ -164,7 +163,6 @@ impl MazeMap {
         }
         Self {
             map,
-            color: Rgb888::WHITE,
             spos: Point::default(),
             epos: Point::default(),
             color_epos: Rgb888::CSS_GREEN,

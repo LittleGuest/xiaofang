@@ -1,10 +1,7 @@
 use defmt::error;
 use embedded_graphics::{pixelcolor::*, prelude::*};
 use esp_hal::Blocking;
-use esp_hal_smartled::{
-    RmtSmartLeds, buffer_size,
-    color_order::{self, Grb, Rgb},
-};
+use esp_hal_smartled::{RmtSmartLeds, buffer_size, color_order::Rgb};
 use heapless::Vec;
 use smart_leds::RGB8;
 use smart_leds_matrix::{
@@ -29,7 +26,7 @@ impl<'d> LedControl<'d> {
     pub fn new(led: RmtSmartLeds<'d, { buffer_size::<RGB8>(NUM_LEDS) }, Blocking, RGB8, Rgb>) -> Self {
         let mut matrix = SmartLedMatrix::<_, _, { 8 * 8 }>::new(led, Rectangular::new(8, 8));
         matrix.set_brightness(1);
-        matrix.clear(Rgb888::new(0, 0, 0)).unwrap();
+        matrix.clear(Rgb888::new(0, 0, 0)).expect("LED 矩阵初始化清屏失败");
 
         Self { matrix }
     }

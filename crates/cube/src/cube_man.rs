@@ -19,15 +19,14 @@ use crate::{Ad, App, buzzer};
 pub struct CubeManGame {
     man: CubeMan,
     floors: VecDeque<Option<Floor>>,
-    floor_gen: FloorGen,
     depth: usize,
     score: u8,
     pub highest: u8,
     game_over: bool,
     /// ms
     waiting_time: u64,
-    /// 得分闪烁状态
-    score_flash: bool,
+    /// 得分闪烁剩余帧数
+    score_flash: u8,
 }
 
 impl Default for CubeManGame {
@@ -46,13 +45,12 @@ impl CubeManGame {
         Self {
             man: CubeMan::new((3, 5).into()),
             floors,
-            floor_gen: FloorGen::new(),
             depth: 0,
             score: 0,
             highest: 0,
             game_over: false,
             waiting_time: 230,
-            score_flash: false,
+            score_flash: 0,
         }
     }
 
@@ -63,10 +61,22 @@ impl CubeManGame {
         loop {
             if self.game_over {
                 buzzer::cube_man_die().await;
+                // 死亡画面效果:方块人变红闪烁后消失
+                let mp = self.man.pos;
+                let mp = Point::new(mp.x, mp.y.clamp(0, 7));
+                for _ in 0..3 {
+                    app.ledc.clear();
+                    app.ledc.write_pixel(Pixel(mp, Rgb888::CSS_RED));
+                    Timer::after_millis(100).await;
+                    app.ledc.clear();
+                    Timer::after_millis(100).await;
+                }
                 app.ledc.draw_score(self.score);
                 Timer::after_millis(1500).await;
                 if self.score > self.highest {
                     self.highest = self.score;
+                    // 破纪录音乐 + 动画
+                    buzzer::cube_man_record().await;
                     app.face.break_record_animate(&mut app.ledc).await;
                 }
                 Timer::after_millis(500).await;
@@ -76,7 +86,8 @@ impl CubeManGame {
             app.check_pause().await;
             {
                 self.floors.pop_front();
-                self.floors.push_back(self.floor_gen.floor(self.depth, &mut app.rng));
+                self.floors
+                    .push_back(FloorGen::floor(self.depth, &mut app.rng, &self.floors));
                 self.floors.iter_mut().for_each(|f| {
                     if let Some(f) = f {
                         f.data.iter_mut().for_each(|f| f.0.y -= 1);
@@ -84,9 +95,15 @@ impl CubeManGame {
                 });
             }
             self.r#move(app).await;
-            self.draw(app);
-            // 随游戏进度加快下落速度,越往后越快(下限 80ms)
-            self.waiting_time = 230u64.saturating_sub(self.depth as u64 * 2).max(80);
+            if !self.game_over {
+                self.draw(app);
+            }
+            // 下落速度随游戏进度加快:用 fall_speed 驱动帧间隔(越往后越快,下限 80ms)
+            self.man.fall_speed = 1.0 + self.depth as f32 * 0.02;
+            self.waiting_time = (230.0 / self.man.fall_speed) as u64;
+            if self.waiting_time < 80 {
+                self.waiting_time = 80;
+            }
 
             Timer::after_millis(self.waiting_time).await;
             self.depth += 1;
@@ -112,12 +129,31 @@ impl CubeManGame {
                 // 随楼梯一起向上运动
                 self.man.up();
                 self.calc_score();
-                self.score_flash = true;
+                self.score_flash = 4;
                 buzzer::cube_man_score().await;
+                let fragile = matches!(floor.r#type, FloorType::Fragile(_));
                 self.moving_on_floor(&floor, app).await;
+                // 易碎楼梯碎裂后从地图移除,人物继续往下掉
+                if fragile {
+                    self.floors = self
+                        .floors
+                        .iter()
+                        .map(|f| {
+                            if f.as_ref().is_some_and(|fl| fl.data == floor.data) {
+                                None
+                            } else {
+                                f.clone()
+                            }
+                        })
+                        .collect();
+                }
             } else {
                 self.man.fall();
             }
+        }
+        // 掉出视野(落到底部/随楼梯升至顶部之上)则游戏结束
+        if self.outside(&self.man.pos) {
+            self.game_over = true;
         }
     }
 
@@ -135,14 +171,21 @@ impl CubeManGame {
 
     /// 是否在楼梯上
     fn on_floor(floors: &[Floor], pos: &Point) -> Option<Floor> {
-        let floor = floors.iter().find(|f| {
-            let min = f.data.iter().min_by(|x, y| x.cmp(y)).unwrap();
-            let max = f.data.iter().max_by(|x, y| x.cmp(y)).unwrap();
-            f.data
-                .iter()
-                .any(|p| min.0.x <= pos.x && pos.x <= max.0.x && p.0.y == pos.y + 1)
-        });
-        floor.cloned()
+        floors
+            .iter()
+            .find(|f| {
+                // f.data 理论上非空; 空时跳过该楼梯, 避免 min/max panic
+                let (Some(min), Some(max)) = (
+                    f.data.iter().min_by(|x, y| x.cmp(y)),
+                    f.data.iter().max_by(|x, y| x.cmp(y)),
+                ) else {
+                    return false;
+                };
+                f.data
+                    .iter()
+                    .any(|p| min.0.x <= pos.x && pos.x <= max.0.x && p.0.y == pos.y + 1)
+            })
+            .cloned()
     }
 
     /// 在楼梯上的移动
@@ -222,16 +265,31 @@ impl CubeManGame {
                         }
                     }
                     ConveyorDir::Counterclockwise => {
-                        if self.man.pos.x - 1 < 8 {
+                        if self.man.pos.x > 0 {
                             self.man.pos.x -= 1;
                         }
                     }
                 }
             }
             FloorType::Spring(h) => {
-                self.man.pos.y -= *h as i32;
+                // 弹簧反弹:渐变(先加速上升,顶点停留后再下落)
+                self.spring_bounce(*h as i32, app).await;
             }
         };
+    }
+
+    /// 弹簧反弹效果:弹性上升(逐步加速)再于顶点短暂停留,之后交由重力自然回落
+    async fn spring_bounce(&mut self, height: i32, app: &mut App<'_>) {
+        let steps = height.max(1);
+        let mut delay = 32u64;
+        for _ in 0..steps {
+            self.man.pos.y -= 1;
+            self.draw(app);
+            Timer::after_millis(delay).await;
+            delay = (delay / 2).max(5); // 加速上升(渐变)
+        }
+        // 顶点短暂停留,制造"被弹起"的滞空感
+        Timer::after_millis(70).await;
     }
 
     pub fn draw(&mut self, app: &mut App<'_>) {
@@ -240,20 +298,19 @@ impl CubeManGame {
         app.ledc.write_pixels(
             self.floors
                 .iter()
-                .filter(|f| f.is_some())
-                .cloned()
-                .flat_map(|f| f.unwrap().data),
+                .filter_map(|f| f.as_ref())
+                .flat_map(|f| f.data.iter().cloned()),
         );
 
-        // 人物（得分时闪白）
+        // 人物（得分时连续闪烁变白）
         let mp = self.man.pos;
-        let color = if self.score_flash {
+        let color = if self.score_flash > 0 {
+            self.score_flash -= 1;
             Rgb888::CSS_WHITE
         } else {
             self.man.color
         };
         app.ledc.write_pixel(Pixel((mp.x, mp.y).into(), color));
-        self.score_flash = false;
     }
 }
 
@@ -328,24 +385,15 @@ impl Floor {
     }
 }
 
+/// 楼梯生成器(纯函数式,不保存状态)
 #[derive(Debug)]
-struct FloorGen {
-    pos: Point,
-    data: VecDeque<Option<Floor>>,
-}
+struct FloorGen;
 
 impl FloorGen {
     fn init() -> VecDeque<Option<Floor>> {
         let mut floors = VecDeque::<Option<Floor>>::new();
         (0..8).for_each(|_| floors.push_back(None));
         floors
-    }
-
-    fn new() -> Self {
-        Self {
-            pos: (0, 0).into(),
-            data: Self::init(),
-        }
     }
 
     /// 随机生成楼梯
@@ -364,15 +412,24 @@ impl FloorGen {
         } else {
             3
         };
-        let len = CubeRng(rng.random() as u64).random_range(3..=max_len);
+        // 随机选择楼梯类型,概率参照 RFC: 正常70% / 易碎10% / 传送带10% / 弹簧10%
+        let r = CubeRng(rng.random() as u64).random_range(1..=10);
+
+        let mut len = CubeRng(rng.random() as u64).random_range(3..=max_len);
+        // 传送带楼梯长度至少为4(两端不闪烁,中间从左到右/右到左扫动)
+        if r == 2 {
+            if max_len < 4 {
+                return None; // 当前等级上限不足4,无法生成合法传送带,跳过本帧
+            }
+            len = len.max(4);
+        }
+
         let start_x = CubeRng(rng.random() as u64).random_range(0..=(8 - len)) as i32;
         let mut data = Vec::<Point>::with_capacity(len);
         for i in 0..len {
             data.push(Point::new(start_x + i as i32, 0));
         }
 
-        // 随机选择楼梯类型,概率参照 RFC: 正常70% / 易碎10% / 传送带10% / 弹簧10%
-        let r = CubeRng(rng.random() as u64).random_range(1..=10);
         let floor = match r {
             1 => Floor::new(FloorType::Fragile(500), &data),
             2 => {
@@ -389,47 +446,22 @@ impl FloorGen {
         Some(floor)
     }
 
-    /// 生成楼梯，y坐标为8
-    fn floor(&mut self, level: usize, rng: &mut Rng) -> Option<Floor> {
+    /// 生成楼梯，y坐标为8；与前一个楼梯至少间隔一个人物高度(>=1 空行)
+    fn floor(level: usize, rng: &mut Rng, floors: &VecDeque<Option<Floor>>) -> Option<Floor> {
+        // 从生成位(栈底)向上找最近的真实楼梯，索引距离 >= 2 才允许生成，保证中间留有空行
+        let dist = floors
+            .iter()
+            .rev()
+            .position(|f| f.is_some())
+            .map_or(usize::MAX, |p| p + 1);
+        if dist < 2 {
+            return None;
+        }
         let mut floor = Self::random(level, rng);
         if let Some(ref mut floor) = floor {
             floor.data.iter_mut().for_each(|f| f.0.y = 8);
         }
         floor
-    }
-
-    fn floors(&mut self, level: usize, rng: &mut Rng) -> VecDeque<Option<Floor>> {
-        let mut floors = VecDeque::<Option<Floor>>::new();
-        floors.push_back(None);
-        floors.push_back(None);
-        let mut floor = Self::random(level, rng);
-        if let Some(ref mut floor) = floor {
-            floor.data.iter_mut().for_each(|f| f.0.y = 8);
-        }
-        floors.push_back(floor);
-
-        let span = CubeRng(rng.random() as u64).random_range(2..=6);
-        for _ in 0..span {
-            floors.push_back(None);
-        }
-        let mut floor = Self::random(level, rng);
-        if let Some(ref mut floor) = floor {
-            floor.data.iter_mut().for_each(|f| f.0.y += span as i32);
-        }
-        floors.push_back(floor);
-
-        floors
-
-        // (0..2)
-        //     .map(|_| {
-        //         let span = unsafe {
-        //             CubeRng(rng().random() as u64).random_range(2..=6) as usize
-        //         };
-        //         let mut floor = Self::random(level);
-        //         floor.data.iter_mut().for_each(|f| f.0.y += span as i32);
-        //         Some(floor)
-        //     })
-        //     .collect::<VecDeque<_>>()
     }
 }
 
@@ -467,7 +499,13 @@ impl CubeMan {
     }
 
     fn r#move(&mut self, app: &mut App<'_>) {
-        self.pos = self.next_pos(app);
+        // 移动速度控制单次输入前进的格数(越大移得越快)
+        let step = self.move_speed.max(1.0) as i32;
+        match app.ad {
+            Ad::Right => self.pos.x = (self.pos.x + step).min(7),
+            Ad::Left => self.pos.x = (self.pos.x - step).max(0),
+            _ => {}
+        }
     }
 
     /// 下落
