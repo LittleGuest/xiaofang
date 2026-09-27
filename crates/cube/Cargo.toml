@@ -36,4 +36,4 @@ cube_rand.workspace = true
 maze.workspace = true
 embassy-futures.workspace = true
 nb.workspace = true
-esp-hal-smartled2.workspace = true
+esp-hal-smartled.workspace = true

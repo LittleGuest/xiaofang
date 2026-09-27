@@ -55,17 +55,17 @@ async fn main(spawner: Spawner) {
 
     let rng = esp_hal::rng::Rng::new();
     let timg0 = TimerGroup::new(peripherals.TIMG0);
-    let sw_interrupt = esp_hal::interrupt::software::SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
-    esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
+    esp_rtos::start(timg0.timer0, peripherals.FROM_CPU_INTR0);
 
     info!("Embassy initialized!");
 
-    let (mut _wifi_controller, interfaces) =
-        esp_radio::wifi::new(peripherals.WIFI, Default::default()).expect("Failed to initialize Wi-Fi controller");
+    let wifi_controller = esp_radio::wifi::WifiController::new(peripherals.WIFI, Default::default())
+        .expect("Failed to initialize Wi-Fi controller");
+    let wifi_interface = esp_radio::wifi::Interface::station();
 
-    // 取出 ESP-NOW 接口与本机 MAC，其余接口丢弃
-    let esp_now = interfaces.esp_now;
-    let my_mac = interfaces.station.mac_address();
+    // 取出 ESP-NOW 接口与本机 MAC
+    let esp_now = wifi_controller.esp_now();
+    let my_mac = wifi_interface.mac_address();
     info!(
         "My MAC: {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
         my_mac[0], my_mac[1], my_mac[2], my_mac[3], my_mac[4], my_mac[5]
@@ -104,6 +104,7 @@ async fn main(spawner: Spawner) {
         WS2812_TIMING,
         rmt.channel0,
         peripherals.GPIO3,
+        Rate::from_mhz(80),
     ) else {
         error!("初始化 LED 灯带失败");
         return;

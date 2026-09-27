@@ -10,7 +10,6 @@ use dice::Dice;
 use embassy_executor::Spawner;
 use embassy_time::Timer;
 use embedded_graphics_core::pixelcolor::Rgb888;
-use embedded_storage::{ReadStorage, Storage};
 use esp_hal::{
     Blocking,
     analog::adc::{Adc, AdcCalLine, AdcPin},
@@ -166,7 +165,7 @@ pub struct App<'d> {
     >,
 
     /// ESP-NOW 联机接口（对打球）
-    esp_now: Option<EspNow<'d>>,
+    esp_now: Option<EspNow>,
     /// 本机 MAC 地址
     my_mac: [u8; 6],
 
@@ -261,7 +260,7 @@ impl<'d> App<'d> {
             esp_hal::peripherals::ADC1<'d>,
             AdcCalLine<esp_hal::peripherals::ADC1<'d>>,
         >,
-        esp_now: EspNow<'d>,
+        esp_now: EspNow,
         my_mac: [u8; 6],
     ) -> Self {
         ledc.set_brightness(0x01);
